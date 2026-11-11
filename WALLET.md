@@ -43,8 +43,8 @@ The wallet must:
 3. Before signing, show the origin and account and state that access reveals
    private balances and transaction history. Connection approval does not cover
    this.
-4. Store remembered grants in the wallet, keyed by origin, account public key, and
-   protocol.
+4. Store remembered grants in the wallet, keyed by exact origin (scheme, host, and
+   port), account public key, and protocol.
 5. Let the user revoke a grant in wallet settings.
 
 Approved websites receive the same seed for an account. Revocation does not affect
@@ -82,8 +82,8 @@ ff736f6c616e61206f6666636861696e
 Return the 64-byte Ed25519 signature as `derivationSeed`. Reject `signMessage`
 requests for these bytes, and keep the seed out of errors and logs.
 
-An account whose signer does not return the same signature for the same message,
-such as a threshold or MPC signer, must not advertise the feature.
+An account whose signer does not produce the deterministic RFC 8032 Ed25519
+signature, such as a threshold or MPC signer, must not advertise the feature.
 
 SDK-based adapters can implement `derivePrivacySeed` from
 `PrivacySeedWalletAdapterProps` instead, with the same checks.

@@ -97,8 +97,9 @@ export function getDerivePrivacySeed(adapter: Adapter): PrivacySeedWalletAdapter
             if (!(output?.derivationSeed instanceof Uint8Array) || output.derivationSeed.length !== 64) {
                 throw new WalletDerivePrivacySeedError('Wallet returned an invalid privacy derivation seed');
             }
-            // Copy so the caller cannot reach the wallet's underlying buffer.
-            return { derivationSeed: output.derivationSeed.slice() };
+            // Copy so the caller cannot reach the wallet's underlying buffer. `slice()` on a
+            // Node `Buffer` returns a view on the same memory, so construct a new array.
+            return { derivationSeed: new Uint8Array(output.derivationSeed) };
         } catch (cause) {
             // Wallet errors can contain secret key material; do not copy their message or cause.
             const error =

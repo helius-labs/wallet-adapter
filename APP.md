@@ -139,8 +139,10 @@ async function enablePrivacy() {
 }
 ```
 
-`derivePrivacySeed` is `undefined` when the connected account lacks the feature. A
-user denial and a wallet failure both reject with `WalletDerivePrivacySeedError`.
+`derivePrivacySeed` is `undefined` when the wallet or the connected account lacks
+the feature. A user denial and a wallet failure both reject with
+`WalletDerivePrivacySeedError`. A disconnect during approval rejects with
+`WalletNotConnectedError`, and an account switch with `WalletAccountError`.
 
 The 64-byte seed derives the user's nullifier and viewing keys. Keep it out of logs
 and unencrypted storage. Approved websites receive the same seed for an account,
