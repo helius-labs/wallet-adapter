@@ -82,5 +82,8 @@ ff736f6c616e61206f6666636861696e
 Return the 64-byte Ed25519 signature as `derivationSeed`. Reject `signMessage`
 requests for these bytes, and keep the seed out of errors and logs.
 
+An account whose signer does not return the same signature for the same message,
+such as a threshold or MPC signer, must not advertise the feature.
+
 SDK-based adapters can implement `derivePrivacySeed` from
 `PrivacySeedWalletAdapterProps` instead, with the same checks.
