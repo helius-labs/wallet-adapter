@@ -55,13 +55,21 @@
         "@solana/wallet-adapter-base": "workspace:^",
         "eslint": "8.22.0",
         "@ngraveio/bc-ur": "1.1.12",
-        "@types/web": "npm:typescript@^5.8.3"
+        "@types/web": "npm:typescript@^5.8.3",
+        "@solana/wallet-standard-chains": "^1.1.2",
+        "@solana/wallet-standard-features": "github:helius-labs/wallet-standard#b2dca30b460445ec9b9bfe6b81b2f1ec2d377bc0&path:/packages/core/features",
+        "@solana/wallet-standard-util": "^1.2.0",
+        "@solana/wallet-standard-wallet-adapter-base": "github:helius-labs/wallet-standard#b2dca30b460445ec9b9bfe6b81b2f1ec2d377bc0&path:/packages/wallet-adapter/base"
     },
     "resolutions": {
         "@solana/wallet-adapter-base": "workspace:^",
         "eslint": "8.22.0",
         "@ngraveio/bc-ur": "1.1.12",
-        "@types/web": "npm:typescript@^5.8.3"
+        "@types/web": "npm:typescript@^5.8.3",
+        "@solana/wallet-standard-chains": "^1.1.2",
+        "@solana/wallet-standard-features": "github:helius-labs/wallet-standard#b2dca30b460445ec9b9bfe6b81b2f1ec2d377bc0&path:/packages/core/features",
+        "@solana/wallet-standard-util": "^1.2.0",
+        "@solana/wallet-standard-wallet-adapter-base": "github:helius-labs/wallet-standard#b2dca30b460445ec9b9bfe6b81b2f1ec2d377bc0&path:/packages/wallet-adapter/base"
     },
     "@parcel/resolver-default": {
         "packageExports": true

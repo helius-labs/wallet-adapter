@@ -1,6 +1,7 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
+    type PrivacySeedWalletAdapterProps,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
     type WalletAdapterProps,
@@ -33,6 +34,7 @@ export interface WalletContextState {
     signAllTransactions: SignerWalletAdapterProps['signAllTransactions'] | undefined;
     signMessage: MessageSignerWalletAdapterProps['signMessage'] | undefined;
     signIn: SignInMessageSignerWalletAdapterProps['signIn'] | undefined;
+    derivePrivacySeed: PrivacySeedWalletAdapterProps['derivePrivacySeed'] | undefined;
 }
 
 const EMPTY_ARRAY: ReadonlyArray<never> = [];
@@ -65,6 +67,9 @@ const DEFAULT_CONTEXT: Partial<WalletContextState> = {
     },
     signIn() {
         return Promise.reject(logMissingProviderError('call', 'signIn'));
+    },
+    derivePrivacySeed() {
+        return Promise.reject(logMissingProviderError('call', 'derivePrivacySeed'));
     },
 };
 Object.defineProperty(DEFAULT_CONTEXT, 'wallets', {

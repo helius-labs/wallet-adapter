@@ -1,6 +1,7 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
+    type PrivacySeedWalletAdapterProps,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
     type WalletAdapterProps,
@@ -251,6 +252,22 @@ export function WalletProviderBase({
         [adapter]
     );
 
+    // Derive a privacy seed if the wallet supports it. Standard wallet adapters add and remove
+    // the method per account, so `publicKey` is a dependency to resolve it again on a switch.
+    const derivePrivacySeed: PrivacySeedWalletAdapterProps['derivePrivacySeed'] | undefined = useMemo(
+        () =>
+            adapter && 'derivePrivacySeed' in adapter
+                ? async (input) => {
+                      if (!connected || !adapter.connected) {
+                          throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
+                      }
+                      return await adapter.derivePrivacySeed(input);
+                  }
+                : undefined,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [adapter, connected, publicKey]
+    );
+
     const handleConnect = useCallback(async () => {
         if (isConnectingRef.current || isDisconnectingRef.current || wallet?.adapter.connected) return;
         if (!wallet) throw handleErrorRef.current(new WalletNotSelectedError());
@@ -301,6 +318,7 @@ export function WalletProviderBase({
                 signAllTransactions,
                 signMessage,
                 signIn,
+                derivePrivacySeed,
             }}
         >
             {children}

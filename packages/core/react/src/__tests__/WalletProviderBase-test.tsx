@@ -9,6 +9,7 @@ import {
     BaseWalletAdapter,
     WalletError,
     type WalletName,
+    WalletNotConnectedError,
     WalletNotReadyError,
     WalletReadyState,
 } from '@solana/wallet-adapter-base';
@@ -393,6 +394,57 @@ describe('WalletProviderBase', () => {
                     });
                 });
             });
+        });
+    });
+    describe('derivePrivacySeed()', () => {
+        it('is undefined for wallets without the capability', () => {
+            renderTest({ adapter: fooWalletAdapter });
+            expect(ref.current?.getWalletContextState().derivePrivacySeed).toBeUndefined();
+        });
+
+        it('exposes the adapter capability after connecting', async () => {
+            const output = { derivationSeed: new Uint8Array(64).fill(7) };
+            const derive = jest.fn().mockResolvedValue(output);
+            Object.assign(fooWalletAdapter, { derivePrivacySeed: derive });
+            renderTest({ adapter: fooWalletAdapter });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            await expect(
+                ref.current?.getWalletContextState().derivePrivacySeed?.({ protocol: 'tspp-v1' })
+            ).resolves.toEqual(output);
+            expect(derive).toHaveBeenCalledWith({ protocol: 'tspp-v1' });
+        });
+
+        it('resolves the capability again when the wallet switches accounts', async () => {
+            renderTest({ adapter: fooWalletAdapter });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            expect(ref.current?.getWalletContextState().derivePrivacySeed).toBeUndefined();
+            const nextPublicKey = new PublicKey('Bar11111111111111111111111111111111111111111');
+            Object.assign(fooWalletAdapter, { publicKey: nextPublicKey, derivePrivacySeed: jest.fn() });
+            act(() => {
+                fooWalletAdapter.emit('connect', nextPublicKey);
+            });
+            expect(ref.current?.getWalletContextState().derivePrivacySeed).toBeDefined();
+        });
+
+        it('rejects a saved callback after disconnect without contacting the wallet', async () => {
+            const derive = jest.fn();
+            const onError = jest.fn();
+            Object.assign(fooWalletAdapter, { derivePrivacySeed: derive });
+            renderTest({ adapter: fooWalletAdapter, onError });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            const savedDerive = ref.current?.getWalletContextState().derivePrivacySeed;
+            await act(async () => {
+                await fooWalletAdapter.disconnect();
+            });
+            await expect(savedDerive?.({ protocol: 'tspp-v1' })).rejects.toThrow(WalletNotConnectedError);
+            expect(derive).not.toHaveBeenCalled();
+            expect(onError).toHaveBeenCalledTimes(1);
         });
     });
     describe('when there is no adapter supplied', () => {

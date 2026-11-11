@@ -121,3 +121,34 @@ export const SendSOLToRandomAddress: FC = () => {
     );
 };
 ```
+
+## Derive a privacy seed
+
+Wallets that implement the custom `tspp:deriveSeed` feature return a privacy
+derivation seed after the user approves the website.
+
+```tsx
+const { connected, derivePrivacySeed } = useWallet();
+
+async function enablePrivacy() {
+    if (!connected || !derivePrivacySeed) {
+        throw new Error('Connect a wallet that supports privacy seed derivation');
+    }
+    const { derivationSeed } = await derivePrivacySeed({ protocol: 'tspp-v1' });
+    return derivationSeed;
+}
+```
+
+`derivePrivacySeed` is `undefined` when the wallet or the connected account lacks
+the feature. A user denial and a wallet failure both reject with
+`WalletDerivePrivacySeedError` from `@solana/wallet-standard-wallet-adapter-base`.
+A disconnect during approval rejects with `WalletNotConnectedError`, and an account
+switch with `WalletAccountError`.
+
+The 64-byte seed derives the user's nullifier and viewing keys. Keep it out of logs
+and unencrypted storage. Approved websites receive the same seed for an account,
+and revoking permission does not invalidate it.
+
+Outside React, call `adapter.derivePrivacySeed({ protocol: 'tspp-v1' })` on a
+connected adapter that exposes the method. Wallet requirements are in
+[WALLET.md](./WALLET.md#privacy-seed-derivation).
