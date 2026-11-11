@@ -4,6 +4,39 @@ This is a quick setup guide with examples of how to add Wallet Adapter to a Reac
 
 See the [packages](https://github.com/anza-xyz/wallet-adapter/blob/master/PACKAGES.md) and [FAQ](https://github.com/anza-xyz/wallet-adapter/blob/master/FAQ.md) for other supported frontend frameworks.
 
+## Derive a privacy seed
+
+Wallets that implement the custom `tspp:deriveSeed` feature can expose a privacy
+derivation seed after the user approves access. This feature requires a wallet
+implementation; installing this adapter does not add support to existing wallets.
+
+```tsx
+const { connected, derivePrivacySeed } = useWallet();
+
+async function enablePrivacy() {
+    if (!connected || !derivePrivacySeed) {
+        throw new Error('Connect a wallet that supports privacy seed derivation');
+    }
+    const { derivationSeed } = await derivePrivacySeed({ protocol: 'tspp-v1' });
+    return derivationSeed;
+}
+```
+
+Call this from a user action. The wallet offers approval for this request or a
+remembered permission for the website. The app cannot whitelist itself or pass an
+origin that overrides the wallet's browser connection.
+
+The returned 64-byte signature is secret key material that derives the user's
+nullifier and viewing keys. Keep it out of logs, analytics, and unencrypted
+persistent storage. Different approved websites receive the same seed for the same
+account and protocol. Revoking permission stops future requests; it cannot erase a
+seed a website already received.
+
+Outside React, import `getDerivePrivacySeed` from
+`@solana/wallet-adapter-base` and call it with the connected adapter. It returns an
+optional function with the same input and output. There is no fallback to
+`signMessage`. See [the wallet implementation contract](./WALLET.md#privacy-seed-derivation).
+
 ## Quick Setup (using React)
 
 ### Install

@@ -1,6 +1,8 @@
 import {
     type Adapter,
+    getDerivePrivacySeed,
     type MessageSignerWalletAdapterProps,
+    type PrivacySeedWalletAdapterProps,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
     type WalletAdapterProps,
@@ -251,6 +253,17 @@ export function WalletProviderBase({
         [adapter]
     );
 
+    const derivePrivacySeed: PrivacySeedWalletAdapterProps['derivePrivacySeed'] | undefined = useMemo(() => {
+        const derive = adapter ? getDerivePrivacySeed(adapter) : undefined;
+        if (!adapter || !derive) return undefined;
+        return async (input) => {
+            if (!connected || !adapter.connected) {
+                throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
+            }
+            return await derive(input);
+        };
+    }, [adapter, connected, publicKey]);
+
     const handleConnect = useCallback(async () => {
         if (isConnectingRef.current || isDisconnectingRef.current || wallet?.adapter.connected) return;
         if (!wallet) throw handleErrorRef.current(new WalletNotSelectedError());
@@ -301,6 +314,7 @@ export function WalletProviderBase({
                 signAllTransactions,
                 signMessage,
                 signIn,
+                derivePrivacySeed,
             }}
         >
             {children}
