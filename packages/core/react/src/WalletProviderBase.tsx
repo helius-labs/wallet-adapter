@@ -253,6 +253,8 @@ export function WalletProviderBase({
         [adapter]
     );
 
+    // Derive a privacy seed if the wallet supports it. `publicKey` is a dependency so
+    // that account support is resolved again when the wallet switches accounts.
     const derivePrivacySeed: PrivacySeedWalletAdapterProps['derivePrivacySeed'] | undefined = useMemo(() => {
         const derive = adapter ? getDerivePrivacySeed(adapter) : undefined;
         if (!adapter || !derive) return undefined;

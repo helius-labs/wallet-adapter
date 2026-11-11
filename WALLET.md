@@ -12,9 +12,8 @@ Contributions are still welcome for new adapters that are not injected into the 
 
 ## Privacy seed derivation
 
-`tspp:deriveSeed` is a custom Wallet Standard feature for this fork, not an official
-Solana feature. Exported types and the `TSPPDeriveSeed` constant are available from
-`@solana/wallet-adapter-base`:
+`tspp:deriveSeed` is a custom Wallet Standard feature. Its types and the
+`TSPPDeriveSeed` constant are exported from `@solana/wallet-adapter-base`.
 
 ```ts
 type TSPPDeriveSeedFeature = {
@@ -28,72 +27,60 @@ type TSPPDeriveSeedFeature = {
 };
 ```
 
-Advertise the feature on both `wallet.features` and each supported account's
-`features`. The bridge selects the account matching the adapter's connected public
-key, validates feature version `1.0.0`, and forwards only the account and protocol.
-It rechecks capabilities on each call and rejects results if the wallet disconnects
-or changes account while approval is pending. It does not cache seeds or implement
-permissions in app storage.
+Advertise the feature on `wallet.features` and on each supporting account's
+`features`. The adapter passes the connected account and the protocol to
+`deriveSeed`, and rejects the result if the wallet disconnects or switches account
+during approval.
 
 ### Wallet permissions
 
-The wallet implementation must:
+The wallet must:
 
-1. Obtain the requesting origin from its trusted extension or wallet transport.
-   Never trust an origin supplied in a page's request payload. Reject opaque
-   origins and use HTTPS origins in production. Frame-based transports must bind
-   the requesting frame and top-level origin so an embedded page cannot inherit
-   another website's grant.
-2. Check that the account belongs to this wallet and is authorized for the
-   connection. Reject unknown protocols, arbitrary messages, and unsupported
-   signing accounts.
-3. Before releasing a seed, show the exact origin and account and explain that
-   access reveals private balances and transaction history. Offer approval for
-   this request or a remembered permission. Ordinary connection approval is not
-   approval to derive privacy keys.
-4. Store remembered grants inside the wallet, keyed by exact origin (scheme,
-   hostname, and port), account public key, and `tspp-v1`. Do not use wildcard
-   domains. Enforce the permission at the trusted signer boundary, not only in
-   the injected provider.
-5. Provide a wallet settings control to revoke a website's grant. Recheck the
-   connection, selected account, and grant before returning a result. Denial must
-   reject without signing or releasing a cached seed.
+1. Take the requesting origin from its extension or transport, not from the
+   request payload.
+2. Reject accounts that are not authorized for the connection, and protocols other
+   than `tspp-v1`.
+3. Before signing, show the origin and account and state that access reveals
+   private balances and transaction history. Connection approval does not cover
+   this.
+4. Store remembered grants in the wallet, keyed by origin, account public key, and
+   protocol.
+5. Let the user revoke a grant in wallet settings.
 
-Every approved website receives the same protocol seed. Revocation does not remove
-previously exported seeds. If exporting the seed is unsuitable, keep privacy keys
-inside the wallet and expose the required privacy operations instead.
+Approved websites receive the same seed for an account. Revocation does not affect
+seeds already returned.
 
-### Exact signing bytes
+### Signing bytes
 
-For `tspp-v1`, construct the following bytes inside the wallet, according to the
-[Helius derivation specification](https://www.helius.dev/docs/privacy/integration/wallet):
+For `tspp-v1`, sign these bytes
+([Helius derivation specification](https://www.helius.dev/docs/privacy/integration/wallet)):
 
 | Field | Bytes |
 | --- | --- |
-| Signing domain | `0xff` followed by ASCII `" solana offchain"` (16 bytes total) |
+| Signing domain | `0xff` followed by ASCII `solana offchain` (16 bytes) |
 | Message version | `0x00` |
 | Application domain | SHA-256 of UTF-8 `"TSPP/derive/v1"` (32 bytes) |
 | Message format | `0x00` (restricted ASCII) |
 | Signer count | `0x01` |
-| Signer | Selected account's Ed25519 public key (32 bytes) |
-| Payload length | `0x0e 0x00` (14, unsigned little-endian 16-bit) |
+| Signer | Account's Ed25519 public key (32 bytes) |
+| Payload length | `0x0e 0x00` (14, little-endian u16) |
 | Payload | UTF-8 `"TSPP/derive/v1"` (14 bytes) |
 
-Return the deterministic 64-byte Ed25519 signature as `derivationSeed`. Signing the
-bare payload, adding the website origin or a nonce, or using another envelope
-produces a different seed. Accounts whose signer cannot produce this exact
-deterministic signature must not advertise the feature.
+Test vector for a signer public key of 32 zero bytes, one field per line:
 
-Continue rejecting generic message-signing requests for the reserved derivation
-message, including its encoded form. The dedicated API is the only path that can
-release this signature after checking privacy permissions. Do not include the seed
-in errors or logs. The standard bridge replaces wallet rejection details with a
-generic `WalletDerivePrivacySeedError` before emitting the adapter's error event.
+```
+ff736f6c616e61206f6666636861696e
+00
+1d32a88533af12d35e5ac6fce817a4cb810bcc4115386b14a78e8b2ef09d864c
+00
+01
+0000000000000000000000000000000000000000000000000000000000000000
+0e00
+545350502f6465726976652f7631
+```
 
-SDK-based adapters can instead implement `PrivacySeedWalletAdapterProps` directly.
-Their `derivePrivacySeed` method has the same protocol and output, and must enforce
-the same wallet-side permission, signing, connection, and account checks and emit
-sanitized errors. `getDerivePrivacySeed(adapter)` resolves either this method or
-the Wallet Standard feature.
+Return the 64-byte Ed25519 signature as `derivationSeed`. Reject `signMessage`
+requests for these bytes, and keep the seed out of errors and logs.
 
-
+SDK-based adapters can implement `derivePrivacySeed` from
+`PrivacySeedWalletAdapterProps` instead, with the same checks.

@@ -90,13 +90,15 @@ export function getDerivePrivacySeed(adapter: Adapter): PrivacySeedWalletAdapter
             } catch {
                 throw new WalletDerivePrivacySeedError('Wallet denied or failed privacy seed derivation');
             }
-            if (!adapter.connected || !adapter.publicKey?.equals(publicKey)) {
+            if (!adapter.connected || !adapter.publicKey) throw new WalletNotConnectedError();
+            if (!adapter.publicKey.equals(publicKey)) {
                 throw new WalletAccountError('Wallet account changed during privacy seed derivation');
             }
             if (!(output?.derivationSeed instanceof Uint8Array) || output.derivationSeed.length !== 64) {
                 throw new WalletDerivePrivacySeedError('Wallet returned an invalid privacy derivation seed');
             }
-            return { derivationSeed: output.derivationSeed };
+            // Copy so the caller cannot reach the wallet's underlying buffer.
+            return { derivationSeed: output.derivationSeed.slice() };
         } catch (cause) {
             // Wallet errors can contain secret key material; do not copy their message or cause.
             const error =

@@ -81,6 +81,15 @@ describe('privacy seed Wallet Standard bridge', () => {
         expect(signMessage).not.toHaveBeenCalled();
     });
 
+    it('returns a copy that does not expose the wallet buffer', async () => {
+        const backing = new Uint8Array(128).fill(7);
+        deriveSeed.mockResolvedValue({ derivationSeed: backing.subarray(32, 96) });
+        const output = await getDerivePrivacySeed(adapter)?.({ protocol: 'tspp-v1' });
+        expect(output?.derivationSeed).toEqual(new Uint8Array(64).fill(7));
+        expect(output?.derivationSeed.buffer).not.toBe(backing.buffer);
+        expect(output?.derivationSeed.byteLength).toBe(output?.derivationSeed.buffer.byteLength);
+    });
+
     it('does not forward a caller-supplied origin or permission grant', async () => {
         const input = { protocol: 'tspp-v1' as const, origin: 'https://trusted.example', approved: true };
         await getDerivePrivacySeed(adapter)?.(input);
@@ -159,7 +168,7 @@ describe('privacy seed Wallet Standard bridge', () => {
             adapter.connected = false;
             return { derivationSeed: new Uint8Array(64) };
         });
-        await expect(getDerivePrivacySeed(adapter)?.({ protocol: 'tspp-v1' })).rejects.toThrow(WalletAccountError);
+        await expect(getDerivePrivacySeed(adapter)?.({ protocol: 'tspp-v1' })).rejects.toThrow(WalletNotConnectedError);
     });
 
     it('propagates denial without retrying or exposing wallet error details', async () => {
