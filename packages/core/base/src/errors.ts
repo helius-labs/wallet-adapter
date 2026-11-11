@@ -64,10 +64,6 @@ export class WalletSignInError extends WalletError {
     name = 'WalletSignInError';
 }
 
-export class WalletDerivePrivacySeedError extends WalletError {
-    name = 'WalletDerivePrivacySeedError';
-}
-
 export class WalletTimeoutError extends WalletError {
     name = 'WalletTimeoutError';
 }

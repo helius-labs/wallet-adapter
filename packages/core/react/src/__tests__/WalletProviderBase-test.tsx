@@ -416,6 +416,20 @@ describe('WalletProviderBase', () => {
             expect(derive).toHaveBeenCalledWith({ protocol: 'tspp-v1' });
         });
 
+        it('resolves the capability again when the wallet switches accounts', async () => {
+            renderTest({ adapter: fooWalletAdapter });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            expect(ref.current?.getWalletContextState().derivePrivacySeed).toBeUndefined();
+            const nextPublicKey = new PublicKey('Bar11111111111111111111111111111111111111111');
+            Object.assign(fooWalletAdapter, { publicKey: nextPublicKey, derivePrivacySeed: jest.fn() });
+            act(() => {
+                fooWalletAdapter.emit('connect', nextPublicKey);
+            });
+            expect(ref.current?.getWalletContextState().derivePrivacySeed).toBeDefined();
+        });
+
         it('rejects a saved callback after disconnect without contacting the wallet', async () => {
             const derive = jest.fn();
             const onError = jest.fn();

@@ -3,6 +3,6 @@
 '@solana/wallet-adapter-react': minor
 ---
 
-Add optional privacy seed derivation through the custom `tspp:deriveSeed` wallet
-feature and `useWallet().derivePrivacySeed`. Supporting wallets must authorize the
-requesting website before returning the TSPP derivation signature.
+Add `useWallet().derivePrivacySeed` for adapters that have a `derivePrivacySeed`
+method. Standard wallets get the method from the custom `tspp:deriveSeed` feature
+in the helius-labs fork of `wallet-standard`.

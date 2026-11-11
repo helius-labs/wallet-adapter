@@ -141,13 +141,14 @@ async function enablePrivacy() {
 
 `derivePrivacySeed` is `undefined` when the wallet or the connected account lacks
 the feature. A user denial and a wallet failure both reject with
-`WalletDerivePrivacySeedError`. A disconnect during approval rejects with
-`WalletNotConnectedError`, and an account switch with `WalletAccountError`.
+`WalletDerivePrivacySeedError` from `@solana/wallet-standard-wallet-adapter-base`.
+A disconnect during approval rejects with `WalletNotConnectedError`, and an account
+switch with `WalletAccountError`.
 
 The 64-byte seed derives the user's nullifier and viewing keys. Keep it out of logs
 and unencrypted storage. Approved websites receive the same seed for an account,
 and revoking permission does not invalidate it.
 
-Outside React, call `getDerivePrivacySeed(adapter)` from
-`@solana/wallet-adapter-base`. Wallet requirements are in
+Outside React, call `adapter.derivePrivacySeed({ protocol: 'tspp-v1' })` on a
+connected adapter that exposes the method. Wallet requirements are in
 [WALLET.md](./WALLET.md#privacy-seed-derivation).

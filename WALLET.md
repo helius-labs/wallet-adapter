@@ -13,7 +13,7 @@ Contributions are still welcome for new adapters that are not injected into the 
 ## Privacy seed derivation
 
 `tspp:deriveSeed` is a custom Wallet Standard feature. Its types and the
-`TSPPDeriveSeed` constant are exported from `@solana/wallet-adapter-base`.
+`TSPPDeriveSeed` constant are exported from `@solana/wallet-standard-features`.
 
 ```ts
 type TSPPDeriveSeedFeature = {
