@@ -202,7 +202,7 @@ export function WalletProviderBase({
             if (!connected) throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
             return await adapter.sendTransaction(transaction, connection, options);
         },
-        [adapter, connected, publicKey]
+        [adapter, connected]
     );
 
     // Sign a transaction if the wallet supports it
@@ -214,7 +214,7 @@ export function WalletProviderBase({
                       return await adapter.signTransaction(transaction);
                   }
                 : undefined,
-        [adapter, connected, publicKey]
+        [adapter, connected]
     );
 
     // Sign multiple transactions if the wallet supports it
@@ -226,7 +226,7 @@ export function WalletProviderBase({
                       return await adapter.signAllTransactions(transactions);
                   }
                 : undefined,
-        [adapter, connected, publicKey]
+        [adapter, connected]
     );
 
     // Sign an arbitrary message if the wallet supports it
@@ -238,7 +238,7 @@ export function WalletProviderBase({
                       return await adapter.signMessage(message);
                   }
                 : undefined,
-        [adapter, connected, publicKey]
+        [adapter, connected]
     );
 
     // Sign in if the wallet supports it
