@@ -59,7 +59,8 @@ result if the wallet disconnects or switches account during approval.
 
 - `getPublicKeys`: the 99-byte shielded address and the 33-byte tagged viewing
   public keys the wallet holds, current first. A tagged key is `0x04` followed by
-  the little-endian X25519 u coordinate.
+  the little-endian X25519 u coordinate. The first key must equal the last 33
+  bytes of the address.
 - `decrypt`: one raw plaintext per request, in request order, each as long as its
   ciphertext. Decrypt with the held key that matches `viewingPublicKey`. Return the
   cipher output even if it is noise: the app checks ownership by recomputing the
@@ -139,4 +140,8 @@ Zolana repository's `test-vectors/key_derivation.json`), label `transfer`:
 | Plaintext                  | `64657465726d696e6973746963` (`"deterministic"`) |
 
 SDK-based adapters can implement `getShieldedPublicKeys`, `decryptShielded`, and
-`deriveShielded` from `ShieldedKeysWalletAdapterProps` instead, with the same rules.
+`deriveShielded` from `ShieldedKeysWalletAdapterProps` instead. They must follow the
+same rules and also do what the Wallet Standard adapter does for them: validate
+request widths before prompting, return fresh byte arrays, check that the first
+viewing key matches the one in the shielded address, and reject with an error
+that carries no wallet details.

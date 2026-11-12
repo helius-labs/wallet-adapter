@@ -1,9 +1,11 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
+    type ShieldedKeysWalletAdapter,
     type ShieldedKeysWalletAdapterProps,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
+    WalletAccountError,
     type WalletAdapterProps,
     type WalletError,
     type WalletName,
@@ -254,46 +256,55 @@ export function WalletProviderBase({
 
     // Shielded keys methods if the wallet supports them. Standard wallet adapters add and remove
     // the methods per account, so `publicKey` is a dependency to resolve them again on a switch.
+    // A saved callback still checks, before and after the wallet call, that the account it was
+    // created for is connected, so results for one account are never returned for another.
+    const callShieldedKeys = useCallback(
+        async <T,>(
+            method: keyof ShieldedKeysWalletAdapterProps,
+            call: (adapter: ShieldedKeysWalletAdapter) => Promise<T>
+        ): Promise<T> => {
+            if (!adapter) throw handleErrorRef.current(new WalletNotConnectedError());
+            const assertAccount = () => {
+                if (!connected || !adapter.connected || !publicKey) {
+                    throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
+                }
+                if (!adapter.publicKey?.equals(publicKey)) {
+                    throw handleErrorRef.current(new WalletAccountError(), adapter);
+                }
+            };
+            assertAccount();
+            if (typeof (adapter as Partial<ShieldedKeysWalletAdapter>)[method] !== 'function') {
+                throw handleErrorRef.current(new WalletAccountError(), adapter);
+            }
+            const output = await call(adapter as ShieldedKeysWalletAdapter);
+            assertAccount();
+            return output;
+        },
+        [adapter, connected, publicKey]
+    );
+
     const getShieldedPublicKeys: ShieldedKeysWalletAdapterProps['getShieldedPublicKeys'] | undefined = useMemo(
         () =>
             adapter && 'getShieldedPublicKeys' in adapter
-                ? async (input) => {
-                      if (!connected || !adapter.connected) {
-                          throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
-                      }
-                      return await adapter.getShieldedPublicKeys(input);
-                  }
+                ? (input) => callShieldedKeys('getShieldedPublicKeys', (a) => a.getShieldedPublicKeys(input))
                 : undefined,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [adapter, connected, publicKey]
+        [adapter, callShieldedKeys]
     );
 
     const decryptShielded: ShieldedKeysWalletAdapterProps['decryptShielded'] | undefined = useMemo(
         () =>
             adapter && 'decryptShielded' in adapter
-                ? async (input) => {
-                      if (!connected || !adapter.connected) {
-                          throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
-                      }
-                      return await adapter.decryptShielded(input);
-                  }
+                ? (input) => callShieldedKeys('decryptShielded', (a) => a.decryptShielded(input))
                 : undefined,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [adapter, connected, publicKey]
+        [adapter, callShieldedKeys]
     );
 
     const deriveShielded: ShieldedKeysWalletAdapterProps['deriveShielded'] | undefined = useMemo(
         () =>
             adapter && 'deriveShielded' in adapter
-                ? async (input) => {
-                      if (!connected || !adapter.connected) {
-                          throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
-                      }
-                      return await adapter.deriveShielded(input);
-                  }
+                ? (input) => callShieldedKeys('deriveShielded', (a) => a.deriveShielded(input))
                 : undefined,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [adapter, connected, publicKey]
+        [adapter, callShieldedKeys]
     );
 
     const handleConnect = useCallback(async () => {

@@ -7,6 +7,7 @@
 import {
     type Adapter,
     BaseWalletAdapter,
+    WalletAccountError,
     WalletError,
     type WalletName,
     WalletNotConnectedError,
@@ -451,6 +452,40 @@ describe('WalletProviderBase', () => {
             await expect(saved?.(input)).rejects.toThrow(WalletNotConnectedError);
             expect(call).not.toHaveBeenCalled();
             expect(onError).toHaveBeenCalledTimes(1);
+        });
+
+        it('rejects a saved callback after an account switch without contacting the wallet', async () => {
+            const call = jest.fn();
+            const onError = jest.fn();
+            Object.assign(fooWalletAdapter, { [method]: call });
+            renderTest({ adapter: fooWalletAdapter, onError });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            const saved = getMethod();
+            const nextPublicKey = new PublicKey('Bar11111111111111111111111111111111111111111');
+            act(() => {
+                fooWalletAdapter.publicKey = nextPublicKey;
+                fooWalletAdapter.emit('connect', nextPublicKey);
+            });
+            await expect(saved?.(input)).rejects.toThrow(WalletAccountError);
+            expect(call).not.toHaveBeenCalled();
+            expect(onError).toHaveBeenCalledTimes(1);
+        });
+
+        it('discards the result if the account switches during the wallet call', async () => {
+            const nextPublicKey = new PublicKey('Bar11111111111111111111111111111111111111111');
+            const call = jest.fn(async () => {
+                fooWalletAdapter.publicKey = nextPublicKey;
+                return { result: method };
+            });
+            Object.assign(fooWalletAdapter, { [method]: call });
+            renderTest({ adapter: fooWalletAdapter });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            await expect(getMethod()?.(input)).rejects.toThrow(WalletAccountError);
+            expect(call).toHaveBeenCalledTimes(1);
         });
     });
     describe('when there is no adapter supplied', () => {

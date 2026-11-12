@@ -127,7 +127,7 @@ export const SendSOLToRandomAddress: FC = () => {
 Wallets that implement the custom `tspp:shieldedKeys` feature keep the user's TSPP
 viewing and nullifier keys. The app gets public keys, decrypted outputs, and
 nullifiers, but never a secret key. The wallet asks the user to approve each
-request.
+`decrypt` and `derive` batch.
 
 ```tsx
 const { connected, getShieldedPublicKeys, decryptShielded, deriveShielded } = useWallet();
@@ -142,15 +142,19 @@ async function readPrivateOutputs() {
     const { shieldedAddress, viewingPublicKeys } = await getShieldedPublicKeys({ protocol });
 
     // 2. Fetch encrypted outputs for the address's view tag with the Zolana SDK
-    //    (`getEncryptedUtxosByTags`), and build one request per output.
-    const requests = encryptedOutputs.map((output) => ({
-        ciphertext: output.ciphertext,
-        viewingPublicKey: viewingPublicKeys[0],
-        txViewingPublicKey: output.txViewingPublicKey,
-        salt: output.salt,
-        slotIndex: output.slotIndex,
-        label: 'transfer' as const,
-    }));
+    //    (`getEncryptedUtxosByTags`). Build one request per output and held viewing
+    //    key: outputs sent before a key rotation open only under a retired key.
+    //    Use label 'ringDeposit' with slot 0 for ring-deposit records.
+    const requests = encryptedOutputs.flatMap((output) =>
+        viewingPublicKeys.map((viewingPublicKey) => ({
+            ciphertext: output.ciphertext,
+            viewingPublicKey,
+            txViewingPublicKey: output.txViewingPublicKey,
+            salt: output.salt,
+            slotIndex: output.slotIndex,
+            label: output.label, // 'transfer' | 'ringDeposit'
+        }))
+    );
 
     // 3. The wallet decrypts after the user approves.
     const { plaintexts } = await decryptShielded({ protocol, requests });
@@ -167,11 +171,17 @@ async function readPrivateOutputs() {
 ```
 
 The methods are `undefined` when the wallet or the connected account lacks the
-feature. A user denial and a wallet failure both reject with
-`WalletShieldedKeysError` from `@solana/wallet-standard-wallet-adapter-base`. A
-malformed request rejects with `WalletConfigError` before the wallet sees it. A
-disconnect during approval rejects with `WalletNotConnectedError`, and an account
-switch with `WalletAccountError`.
+feature. A callback saved before a disconnect rejects with
+`WalletNotConnectedError`, and one saved before an account switch with
+`WalletAccountError`. A result that arrives after the account changed is
+discarded with the same errors.
+
+For Wallet Standard wallets, the adapter in `@solana/wallet-standard-wallet-adapter-base`
+also checks the requests and the result. A user denial and a wallet failure both
+reject with its `WalletShieldedKeysError`, without the wallet's error message. A
+malformed request rejects with `WalletConfigError` before the wallet sees it. An
+SDK-based adapter that implements the methods itself is responsible for the same
+checks.
 
 Decryption output is unauthenticated: a ciphertext for someone else decrypts to
 noise. Accept an output only after its recomputed hash matches the indexed hash.
