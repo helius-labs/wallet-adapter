@@ -1,6 +1,7 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
+    type ShieldedKeysWalletAdapterProps,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
     type WalletAdapterProps,
@@ -251,6 +252,50 @@ export function WalletProviderBase({
         [adapter]
     );
 
+    // Shielded keys methods if the wallet supports them. Standard wallet adapters add and remove
+    // the methods per account, so `publicKey` is a dependency to resolve them again on a switch.
+    const getShieldedPublicKeys: ShieldedKeysWalletAdapterProps['getShieldedPublicKeys'] | undefined = useMemo(
+        () =>
+            adapter && 'getShieldedPublicKeys' in adapter
+                ? async (input) => {
+                      if (!connected || !adapter.connected) {
+                          throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
+                      }
+                      return await adapter.getShieldedPublicKeys(input);
+                  }
+                : undefined,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [adapter, connected, publicKey]
+    );
+
+    const decryptShielded: ShieldedKeysWalletAdapterProps['decryptShielded'] | undefined = useMemo(
+        () =>
+            adapter && 'decryptShielded' in adapter
+                ? async (input) => {
+                      if (!connected || !adapter.connected) {
+                          throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
+                      }
+                      return await adapter.decryptShielded(input);
+                  }
+                : undefined,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [adapter, connected, publicKey]
+    );
+
+    const deriveShielded: ShieldedKeysWalletAdapterProps['deriveShielded'] | undefined = useMemo(
+        () =>
+            adapter && 'deriveShielded' in adapter
+                ? async (input) => {
+                      if (!connected || !adapter.connected) {
+                          throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
+                      }
+                      return await adapter.deriveShielded(input);
+                  }
+                : undefined,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [adapter, connected, publicKey]
+    );
+
     const handleConnect = useCallback(async () => {
         if (isConnectingRef.current || isDisconnectingRef.current || wallet?.adapter.connected) return;
         if (!wallet) throw handleErrorRef.current(new WalletNotSelectedError());
@@ -301,6 +346,9 @@ export function WalletProviderBase({
                 signAllTransactions,
                 signMessage,
                 signIn,
+                getShieldedPublicKeys,
+                decryptShielded,
+                deriveShielded,
             }}
         >
             {children}

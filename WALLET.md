@@ -10,4 +10,133 @@ We are no longer accepting contributions for new adapters of this type. Bug fixe
 
 Contributions are still welcome for new adapters that are not injected into the window but instead rely on loading an SDK to interact with an external wallet.
 
+## Wallet-held shielded keys
 
+`tspp:shieldedKeys` is a custom Wallet Standard feature. Its types and the
+`TSPPShieldedKeys` constant are exported from `@solana/wallet-standard-features`.
+The wallet keeps the account's TSPP viewing and nullifier keys and answers read
+requests with them. It mirrors the read side of the Zolana SDK's `ShieldedKeys`.
+
+```ts
+type TSPPShieldedKeysFeature = {
+    'tspp:shieldedKeys': {
+        version: '1.0.0';
+        getPublicKeys(input: {
+            account: WalletAccount;
+            protocol: 'tspp-v1';
+        }): Promise<{ shieldedAddress: Uint8Array; viewingPublicKeys: readonly Uint8Array[] }>;
+        decrypt(input: {
+            account: WalletAccount;
+            protocol: 'tspp-v1';
+            requests: readonly {
+                ciphertext: Uint8Array;
+                viewingPublicKey: Uint8Array; // 33 bytes
+                txViewingPublicKey: Uint8Array; // 33 bytes
+                salt: Uint8Array; // 16 bytes
+                slotIndex: number; // u32, 0 for ringDeposit
+                label: 'transfer' | 'ringDeposit';
+            }[];
+        }): Promise<{ plaintexts: readonly Uint8Array[] }>;
+        derive(input: {
+            account: WalletAccount;
+            protocol: 'tspp-v1';
+            requests: readonly (
+                | { kind: 'nullifier'; utxoHash: Uint8Array; blinding: Uint8Array }
+                | { kind: 'mergeOutputKey'; firstNullifier: Uint8Array }
+                | { kind: 'mergeOutputBlinding'; firstNullifier: Uint8Array }
+            )[];
+        }): Promise<{ values: readonly Uint8Array[] }>;
+    };
+};
+```
+
+Advertise the feature on `wallet.features` and on each supporting account's
+`features`. The adapter passes the connected account, validates request widths
+before calling the wallet, and validates and copies the output. It rejects the
+result if the wallet disconnects or switches account during approval.
+
+### Outputs
+
+- `getPublicKeys`: the 99-byte shielded address and the 33-byte tagged viewing
+  public keys the wallet holds, current first. A tagged key is `0x04` followed by
+  the little-endian X25519 u coordinate.
+- `decrypt`: one raw plaintext per request, in request order, each as long as its
+  ciphertext. Decrypt with the held key that matches `viewingPublicKey`. Return the
+  cipher output even if it is noise: the app checks ownership by recomputing the
+  UTXO hash.
+- `derive`: one 32-byte value per request, in request order.
+
+A malformed request rejects the whole batch.
+
+### Wallet rules
+
+The wallet must:
+
+1. Take the requesting origin from its extension or transport, not from the
+   request payload.
+2. Reject accounts that are not authorized for the connection, and protocols other
+   than `tspp-v1`.
+3. Ask the user to approve each `decrypt` and `derive` batch. Show the origin,
+   account, operation, and request count, and state that approval reveals private
+   balances and history. Connection approval does not cover this.
+4. Store no grants or other new state.
+5. Never return the derivation seed, the viewing or nullifier secret, or a
+   per-transaction viewing key. Keep them out of errors and logs.
+6. Reject `signMessage` and `signIn` requests whose signed bytes equal the
+   derivation message below. Otherwise a site could obtain the seed by signing it.
+
+An account whose signer does not produce the deterministic RFC 8032 Ed25519
+signature, such as a threshold or MPC signer, must not advertise the feature.
+
+### Keys
+
+Sign the derivation message with the account's Ed25519 key. The 64-byte signature
+is the seed. Build the keys from it with the Zolana SDK's
+`LocalShieldedKeys.fromDerivationSeed`, which implements `decrypt` and `derive`
+for these requests. Prefer it to a separate implementation; the summary below is
+for checking one against the test vector.
+
+Derivation message bytes
+([Helius derivation specification](https://www.helius.dev/docs/privacy/integration/wallet)):
+
+| Field              | Bytes                                                 |
+| ------------------ | ----------------------------------------------------- |
+| Signing domain     | `0xff` followed by ASCII `solana offchain` (16 bytes) |
+| Message version    | `0x00`                                                |
+| Application domain | SHA-256 of UTF-8 `"TSPP/derive/v1"` (32 bytes)        |
+| Message format     | `0x00` (restricted ASCII)                             |
+| Signer count       | `0x01`                                                |
+| Signer             | Account's Ed25519 public key (32 bytes)               |
+| Payload length     | `0x0e 0x00` (14, little-endian u16)                   |
+| Payload            | UTF-8 `"TSPP/derive/v1"` (14 bytes)                   |
+
+From the seed, `prk = HKDF-Extract(SHA-256, no salt, seed)`. The viewing secret is
+`HKDF-Expand(prk, "TSPP/view_key/ed25519/x25519/v1", 32)` with X25519 clamping, and
+the nullifier secret is `HKDF-Expand(prk, "TSPP/nf_key/ed25519/v1", 31)`.
+
+### Decryption
+
+For a request:
+
+```text
+dh    = X25519(viewingSecret, txViewingPublicKey u coordinate)
+ikm   = dh || txViewingPublicKey || viewingPublicKey      (33-byte tagged keys)
+info  = "TSPP/hpke/" || label || salt || u32be(slotIndex)  (label "TSPP/tx" or "TSPP/ring_deposit")
+okm   = HKDF-SHA256(ikm, no salt, info, 44)
+plain = AES-256-CTR(key = okm[0..32], counter block = okm[32..44] || u32be(2), ciphertext)
+```
+
+Reject malformed public keys and an all-zero `dh`. Test vector (`hpke_utxo` in the
+Zolana repository's `test-vectors/key_derivation.json`), label `transfer`:
+
+| Field                      | Value                                            |
+| -------------------------- | ------------------------------------------------ |
+| Recipient viewing secret   | `00..02` (32 bytes)                              |
+| Transaction viewing secret | `00..01` (32 bytes)                              |
+| Salt                       | 16 zero bytes                                    |
+| Slot index                 | `0`                                              |
+| Ciphertext                 | `ea82df97f14bd244e83b4fabfd`                     |
+| Plaintext                  | `64657465726d696e6973746963` (`"deterministic"`) |
+
+SDK-based adapters can implement `getShieldedPublicKeys`, `decryptShielded`, and
+`deriveShielded` from `ShieldedKeysWalletAdapterProps` instead, with the same rules.

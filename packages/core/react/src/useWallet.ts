@@ -1,6 +1,7 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
+    type ShieldedKeysWalletAdapterProps,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
     type WalletAdapterProps,
@@ -33,6 +34,9 @@ export interface WalletContextState {
     signAllTransactions: SignerWalletAdapterProps['signAllTransactions'] | undefined;
     signMessage: MessageSignerWalletAdapterProps['signMessage'] | undefined;
     signIn: SignInMessageSignerWalletAdapterProps['signIn'] | undefined;
+    getShieldedPublicKeys: ShieldedKeysWalletAdapterProps['getShieldedPublicKeys'] | undefined;
+    decryptShielded: ShieldedKeysWalletAdapterProps['decryptShielded'] | undefined;
+    deriveShielded: ShieldedKeysWalletAdapterProps['deriveShielded'] | undefined;
 }
 
 const EMPTY_ARRAY: ReadonlyArray<never> = [];
@@ -65,6 +69,15 @@ const DEFAULT_CONTEXT: Partial<WalletContextState> = {
     },
     signIn() {
         return Promise.reject(logMissingProviderError('call', 'signIn'));
+    },
+    getShieldedPublicKeys() {
+        return Promise.reject(logMissingProviderError('call', 'getShieldedPublicKeys'));
+    },
+    decryptShielded() {
+        return Promise.reject(logMissingProviderError('call', 'decryptShielded'));
+    },
+    deriveShielded() {
+        return Promise.reject(logMissingProviderError('call', 'deriveShielded'));
     },
 };
 Object.defineProperty(DEFAULT_CONTEXT, 'wallets', {

@@ -9,6 +9,7 @@ import {
     BaseWalletAdapter,
     WalletError,
     type WalletName,
+    WalletNotConnectedError,
     WalletNotReadyError,
     WalletReadyState,
 } from '@solana/wallet-adapter-base';
@@ -393,6 +394,63 @@ describe('WalletProviderBase', () => {
                     });
                 });
             });
+        });
+    });
+    describe.each([
+        ['getShieldedPublicKeys', { protocol: 'tspp-v1' }],
+        ['decryptShielded', { protocol: 'tspp-v1', requests: [] }],
+        ['deriveShielded', { protocol: 'tspp-v1', requests: [] }],
+    ] as const)('%s()', (method, input) => {
+        function getMethod() {
+            return ref.current?.getWalletContextState()[method] as ((input: unknown) => Promise<unknown>) | undefined;
+        }
+
+        it('is undefined for wallets without the capability', () => {
+            renderTest({ adapter: fooWalletAdapter });
+            expect(getMethod()).toBeUndefined();
+        });
+
+        it('exposes the adapter capability after connecting', async () => {
+            const output = { result: method };
+            const call = jest.fn().mockResolvedValue(output);
+            Object.assign(fooWalletAdapter, { [method]: call });
+            renderTest({ adapter: fooWalletAdapter });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            await expect(getMethod()?.(input)).resolves.toEqual(output);
+            expect(call).toHaveBeenCalledWith(input);
+        });
+
+        it('resolves the capability again when the wallet switches accounts', async () => {
+            renderTest({ adapter: fooWalletAdapter });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            expect(getMethod()).toBeUndefined();
+            const nextPublicKey = new PublicKey('Bar11111111111111111111111111111111111111111');
+            Object.assign(fooWalletAdapter, { publicKey: nextPublicKey, [method]: jest.fn() });
+            act(() => {
+                fooWalletAdapter.emit('connect', nextPublicKey);
+            });
+            expect(getMethod()).toBeDefined();
+        });
+
+        it('rejects a saved callback after disconnect without contacting the wallet', async () => {
+            const call = jest.fn();
+            const onError = jest.fn();
+            Object.assign(fooWalletAdapter, { [method]: call });
+            renderTest({ adapter: fooWalletAdapter, onError });
+            await act(async () => {
+                await fooWalletAdapter.connect();
+            });
+            const saved = getMethod();
+            await act(async () => {
+                await fooWalletAdapter.disconnect();
+            });
+            await expect(saved?.(input)).rejects.toThrow(WalletNotConnectedError);
+            expect(call).not.toHaveBeenCalled();
+            expect(onError).toHaveBeenCalledTimes(1);
         });
     });
     describe('when there is no adapter supplied', () => {
