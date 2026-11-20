@@ -1,8 +1,11 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
+    type ShieldedKeysWalletAdapter,
+    type ShieldedKeysWalletAdapterProps,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
+    WalletAccountError,
     type WalletAdapterProps,
     type WalletError,
     type WalletName,
@@ -251,6 +254,59 @@ export function WalletProviderBase({
         [adapter]
     );
 
+    // Shielded keys methods if the wallet supports them. Standard wallet adapters add and remove
+    // the methods per account, so `publicKey` is a dependency to resolve them again on a switch.
+    // A saved callback still checks, before and after the wallet call, that the account it was
+    // created for is connected, so results for one account are never returned for another.
+    const callShieldedKeys = useCallback(
+        async <T,>(
+            method: keyof ShieldedKeysWalletAdapterProps,
+            call: (adapter: ShieldedKeysWalletAdapter) => Promise<T>
+        ): Promise<T> => {
+            if (!adapter) throw handleErrorRef.current(new WalletNotConnectedError());
+            const assertAccount = () => {
+                if (!connected || !adapter.connected || !publicKey) {
+                    throw handleErrorRef.current(new WalletNotConnectedError(), adapter);
+                }
+                if (!adapter.publicKey?.equals(publicKey)) {
+                    throw handleErrorRef.current(new WalletAccountError(), adapter);
+                }
+            };
+            assertAccount();
+            if (typeof (adapter as Partial<ShieldedKeysWalletAdapter>)[method] !== 'function') {
+                throw handleErrorRef.current(new WalletAccountError(), adapter);
+            }
+            const output = await call(adapter as ShieldedKeysWalletAdapter);
+            assertAccount();
+            return output;
+        },
+        [adapter, connected, publicKey]
+    );
+
+    const getShieldedPublicKeys: ShieldedKeysWalletAdapterProps['getShieldedPublicKeys'] | undefined = useMemo(
+        () =>
+            adapter && 'getShieldedPublicKeys' in adapter
+                ? (input) => callShieldedKeys('getShieldedPublicKeys', (a) => a.getShieldedPublicKeys(input))
+                : undefined,
+        [adapter, callShieldedKeys]
+    );
+
+    const decryptShielded: ShieldedKeysWalletAdapterProps['decryptShielded'] | undefined = useMemo(
+        () =>
+            adapter && 'decryptShielded' in adapter
+                ? (input) => callShieldedKeys('decryptShielded', (a) => a.decryptShielded(input))
+                : undefined,
+        [adapter, callShieldedKeys]
+    );
+
+    const deriveShielded: ShieldedKeysWalletAdapterProps['deriveShielded'] | undefined = useMemo(
+        () =>
+            adapter && 'deriveShielded' in adapter
+                ? (input) => callShieldedKeys('deriveShielded', (a) => a.deriveShielded(input))
+                : undefined,
+        [adapter, callShieldedKeys]
+    );
+
     const handleConnect = useCallback(async () => {
         if (isConnectingRef.current || isDisconnectingRef.current || wallet?.adapter.connected) return;
         if (!wallet) throw handleErrorRef.current(new WalletNotSelectedError());
@@ -301,6 +357,9 @@ export function WalletProviderBase({
                 signAllTransactions,
                 signMessage,
                 signIn,
+                getShieldedPublicKeys,
+                decryptShielded,
+                deriveShielded,
             }}
         >
             {children}

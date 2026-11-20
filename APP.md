@@ -121,3 +121,75 @@ export const SendSOLToRandomAddress: FC = () => {
     );
 };
 ```
+
+## Use wallet-held shielded keys
+
+Wallets that implement the custom `tspp:shieldedKeys` feature keep the user's TSPP
+viewing and nullifier keys. The app gets public keys, decrypted outputs, and
+nullifiers, but never a secret key. The wallet asks the user to approve each
+`decrypt` and `derive` batch.
+
+```tsx
+const { connected, getShieldedPublicKeys, decryptShielded, deriveShielded } = useWallet();
+
+async function readPrivateOutputs() {
+    if (!connected || !getShieldedPublicKeys || !decryptShielded || !deriveShielded) {
+        throw new Error('Connect a wallet that supports shielded keys');
+    }
+    const protocol = 'tspp-v1';
+
+    // 1. Public keys. The shielded address contains the nullifier public key.
+    const { shieldedAddress, viewingPublicKeys } = await getShieldedPublicKeys({ protocol });
+
+    // 2. Fetch encrypted outputs for the address's view tag with the Zolana SDK
+    //    (`getEncryptedUtxosByTags`). Build one request per output and held viewing
+    //    key: outputs sent before a key rotation open only under a retired key.
+    //    Use label 'ringDeposit' with slot 0 for ring-deposit records.
+    const requests = encryptedOutputs.flatMap((output) =>
+        viewingPublicKeys.map((viewingPublicKey) => ({
+            ciphertext: output.ciphertext,
+            viewingPublicKey,
+            txViewingPublicKey: output.txViewingPublicKey,
+            salt: output.salt,
+            slotIndex: output.slotIndex,
+            label: output.label, // 'transfer' | 'ringDeposit'
+        }))
+    );
+
+    // 3. The wallet decrypts after the user approves.
+    const { plaintexts } = await decryptShielded({ protocol, requests });
+
+    // 4. Decode each plaintext with the SDK and recompute the UTXO hash from the
+    //    nullifier public key. Discard outputs whose hash does not match the indexed hash.
+
+    // 5. Derive nullifiers of the accepted UTXOs to detect spent outputs.
+    const { values: nullifiers } = await deriveShielded({
+        protocol,
+        requests: accepted.map((utxo) => ({ kind: 'nullifier', utxoHash: utxo.hash, blinding: utxo.blinding })),
+    });
+}
+```
+
+The methods are `undefined` when the wallet or the connected account lacks the
+feature. A callback saved before a disconnect rejects with
+`WalletNotConnectedError`, and one saved before an account switch with
+`WalletAccountError`. A result that arrives after the account changed is
+discarded with the same errors.
+
+For Wallet Standard wallets, the adapter in `@solana/wallet-standard-wallet-adapter-base`
+also checks the requests and the result. A user denial and a wallet failure both
+reject with its `WalletShieldedKeysError`, without the wallet's error message. A
+malformed request rejects with `WalletConfigError` before the wallet sees it. An
+SDK-based adapter that implements the methods itself is responsible for the same
+checks.
+
+Decryption output is unauthenticated: a ciphertext for someone else decrypts to
+noise. Accept an output only after its recomputed hash matches the indexed hash.
+
+`deriveShielded` accepts `nullifier`, `mergeOutputKey`, and `mergeOutputBlinding`
+requests. The last two recover merge outputs. The feature does not return
+per-transaction viewing keys, so sent history is not available, and it does not
+sign or prove spends.
+
+Outside React, call the same methods on a connected adapter that exposes them.
+Wallet requirements are in [WALLET.md](./WALLET.md#wallet-held-shielded-keys).
