@@ -1,6 +1,6 @@
 # Wallet Adapter for Solana Wallets
 
-Support for [Mobile Wallet Adapter](https://github.com/solana-mobile/mobile-wallet-adapter) (MWA) and the [Wallet Standard](https://github.com/wallet-standard/wallet-standard) has been added directly into Wallet Adapter.  Please review the MWA docs and [this guide for wallets](https://github.com/solana-labs/wallet-standard/blob/master/WALLET.md) to implement the Wallet Standard.
+Support for [Mobile Wallet Adapter](https://github.com/solana-mobile/mobile-wallet-adapter) (MWA) and the [Wallet Standard](https://github.com/wallet-standard/wallet-standard) has been added directly into Wallet Adapter. Please review the MWA docs and [this guide for wallets](https://github.com/solana-labs/wallet-standard/blob/master/WALLET.md) to implement the Wallet Standard.
 
 You can implement these protocols directly in your wallet, and your wallet will work across Solana apps. As wallets continue to add support for these protocols, the adapters for these wallets will be deprecated.
 
@@ -16,6 +16,8 @@ Contributions are still welcome for new adapters that are not injected into the 
 `TSPPShieldedKeys` constant are exported from `@solana/wallet-standard-features`.
 The wallet keeps the account's TSPP viewing and nullifier keys and answers read
 requests with them. It mirrors the read side of the Zolana SDK's `ShieldedKeys`.
+`grantView` records a short permission to answer `decrypt` and `derive` without
+another prompt. The grant holds no key material.
 
 ```ts
 type TSPPShieldedKeysFeature = {
@@ -46,6 +48,11 @@ type TSPPShieldedKeysFeature = {
                 | { kind: 'mergeOutputBlinding'; firstNullifier: Uint8Array }
             )[];
         }): Promise<{ values: readonly Uint8Array[] }>;
+        grantView(input: {
+            account: WalletAccount;
+            protocol: 'tspp-v1';
+            durationSeconds: number; // wallet clamps to 1..1800
+        }): Promise<{ expiresAt: number }>; // unix milliseconds, wallet clock
     };
 };
 ```
@@ -66,6 +73,7 @@ result if the wallet disconnects or switches account during approval.
   cipher output even if it is noise: the app checks ownership by recomputing the
   UTXO hash.
 - `derive`: one 32-byte value per request, in request order.
+- `grantView`: `{ expiresAt }` on the wallet clock. `getPublicKeys` does not require a grant.
 
 A malformed request rejects the whole batch.
 
@@ -77,12 +85,26 @@ The wallet must:
    request payload.
 2. Reject accounts that are not authorized for the connection, and protocols other
    than `tspp-v1`.
-3. Ask the user to approve each `decrypt` and `derive` batch. Show the origin,
-   account, operation, and request count, and state that approval reveals private
-   balances and history. Connection approval does not cover this.
-4. Store no grants or other new state.
+3. Ask the user to approve each `decrypt` and `derive` batch, unless a live view
+   grant covers this origin, account, and `tspp-v1`. Show the origin, account,
+   operation, and request count, and state that approval reveals private balances
+   and history. Connection approval does not cover this.
+4. Store a view grant as the only new state. It records the origin, account,
+   protocol, and `expiresAt`, and no key material. `ShieldedViewGrantStore` in
+   `@solana/wallet-adapter-base` is the reference behavior:
+    - Clamp `durationSeconds` to `1..1800`. Set `expiresAt` from the wallet clock.
+      Ignore a dapp-supplied expiry.
+    - The approval dialog names the origin, the account, and the concrete end
+      time, and states that this does not allow spending.
+    - If a grant for this origin and account is already live, return it and do not
+      prompt. Do not extend it. A longer request waits until it expires.
+    - Clear it on lock, disconnect, account switch, and as soon as `expiresAt` is
+      reached. Keep it in the unlocked session only.
+    - The grant covers `decrypt` and `derive` only. It does not cover spending,
+      proving, `signMessage`, or `signIn`.
 5. Never return the derivation seed, the viewing or nullifier secret, or a
-   per-transaction viewing key. Keep them out of errors and logs.
+   per-transaction viewing key. Keep them out of errors and logs. The grant does
+   not change what `decrypt` and `derive` return.
 6. Reject `signMessage` and `signIn` requests whose signed bytes equal the
    derivation message below. Otherwise a site could obtain the seed by signing it.
 
@@ -139,9 +161,12 @@ Zolana repository's `test-vectors/key_derivation.json`), label `transfer`:
 | Ciphertext                 | `ea82df97f14bd244e83b4fabfd`                     |
 | Plaintext                  | `64657465726d696e6973746963` (`"deterministic"`) |
 
-SDK-based adapters can implement `getShieldedPublicKeys`, `decryptShielded`, and
-`deriveShielded` from `ShieldedKeysWalletAdapterProps` instead. They must follow the
-same rules and also do what the Wallet Standard adapter does for them: validate
-request widths before prompting, return fresh byte arrays, check that the first
-viewing key matches the one in the shielded address, and reject with an error
-that carries no wallet details.
+SDK-based adapters can implement `getShieldedPublicKeys`, `decryptShielded`,
+`deriveShielded`, and `grantShieldedView` from `ShieldedKeysWalletAdapterProps`
+instead. They must follow the same rules and also do what the Wallet Standard
+adapter does for them: validate request widths before prompting, return fresh byte
+arrays, check that the first viewing key matches the one in the shielded address,
+and reject with an error that carries no wallet details. Use `ShieldedViewGrantStore`
+for the grant record. The pinned `@solana/wallet-standard-wallet-adapter-base`
+does not forward `grantView` yet; a Wallet Standard wallet needs that forwarding
+before `useWallet().grantShieldedView` is defined.

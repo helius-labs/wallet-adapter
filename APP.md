@@ -27,11 +27,7 @@ import React, { FC, useMemo } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { UnsafeBurnerWalletAdapter } from '@solana/wallet-adapter-wallets';
-import {
-    WalletModalProvider,
-    WalletDisconnectButton,
-    WalletMultiButton
-} from '@solana/wallet-adapter-react-ui';
+import { WalletModalProvider, WalletDisconnectButton, WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
 
 // Default styles that can be overridden by your app
@@ -70,7 +66,7 @@ export const Wallet: FC = () => {
                 <WalletModalProvider>
                     <WalletMultiButton />
                     <WalletDisconnectButton />
-                    { /* Your app's components go here, nested within the context providers. */ }
+                    {/* Your app's components go here, nested within the context providers. */}
                 </WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>
@@ -106,7 +102,7 @@ export const SendSOLToRandomAddress: FC = () => {
 
         const {
             context: { slot: minContextSlot },
-            value: { blockhash, lastValidBlockHeight }
+            value: { blockhash, lastValidBlockHeight },
         } = await connection.getLatestBlockhashAndContext();
 
         const signature = await sendTransaction(transaction, connection, { minContextSlot });
@@ -126,22 +122,28 @@ export const SendSOLToRandomAddress: FC = () => {
 
 Wallets that implement the custom `tspp:shieldedKeys` feature keep the user's TSPP
 viewing and nullifier keys. The app gets public keys, decrypted outputs, and
-nullifiers, but never a secret key. The wallet asks the user to approve each
-`decrypt` and `derive` batch.
+nullifiers, but never a secret key. A view grant lets the app decrypt and derive
+for up to 30 minutes after one approval. Without a grant, the wallet asks the
+user to approve each `decrypt` and `derive` batch.
 
 ```tsx
-const { connected, getShieldedPublicKeys, decryptShielded, deriveShielded } = useWallet();
+const { connected, getShieldedPublicKeys, decryptShielded, deriveShielded, grantShieldedView } = useWallet();
 
 async function readPrivateOutputs() {
-    if (!connected || !getShieldedPublicKeys || !decryptShielded || !deriveShielded) {
+    if (!connected || !getShieldedPublicKeys || !decryptShielded || !deriveShielded || !grantShieldedView) {
         throw new Error('Connect a wallet that supports shielded keys');
     }
     const protocol = 'tspp-v1';
 
-    // 1. Public keys. The shielded address contains the nullifier public key.
+    // 1. One approval covers decrypt and derive until expiresAt. A live grant is
+    //    returned unchanged. The wallet clamps the lifetime to 30 minutes.
+    const { expiresAt } = await grantShieldedView({ protocol, durationSeconds: 30 * 60 });
+
+    // 2. Public keys. The shielded address contains the nullifier public key.
+    //    This call does not require a grant.
     const { shieldedAddress, viewingPublicKeys } = await getShieldedPublicKeys({ protocol });
 
-    // 2. Fetch encrypted outputs for the address's view tag with the Zolana SDK
+    // 3. Fetch encrypted outputs for the address's view tag with the Zolana SDK
     //    (`getEncryptedUtxosByTags`). Build one request per output and held viewing
     //    key: outputs sent before a key rotation open only under a retired key.
     //    Use label 'ringDeposit' with slot 0 for ring-deposit records.
@@ -156,13 +158,14 @@ async function readPrivateOutputs() {
         }))
     );
 
-    // 3. The wallet decrypts after the user approves.
+    // 4. The wallet decrypts without another prompt while expiresAt is in the future.
     const { plaintexts } = await decryptShielded({ protocol, requests });
 
-    // 4. Decode each plaintext with the SDK and recompute the UTXO hash from the
+    // 5. Decode each plaintext with the SDK and recompute the UTXO hash from the
     //    nullifier public key. Discard outputs whose hash does not match the indexed hash.
 
-    // 5. Derive nullifiers of the accepted UTXOs to detect spent outputs.
+    // 6. Derive nullifiers of the accepted UTXOs to detect spent outputs. The same
+    //    grant covers this call.
     const { values: nullifiers } = await deriveShielded({
         protocol,
         requests: accepted.map((utxo) => ({ kind: 'nullifier', utxoHash: utxo.hash, blinding: utxo.blinding })),
