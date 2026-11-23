@@ -59,13 +59,39 @@ export interface DeriveShieldedOutput {
     readonly values: readonly Uint8Array[];
 }
 
-/** The wallet holds the TSPP viewing and nullifier keys. No method returns a secret key. */
+/** Longest view grant a wallet may issue. The wallet clamps longer requests. */
+export const SHIELDED_VIEW_GRANT_MAX_SECONDS = 30 * 60;
+
+export interface GrantShieldedViewInput {
+    readonly protocol: ShieldedKeysProtocol;
+    /**
+     * Requested lifetime in seconds. The wallet clamps this to
+     * `1..SHIELDED_VIEW_GRANT_MAX_SECONDS` and sets the expiry from its own clock.
+     */
+    readonly durationSeconds: number;
+}
+
+export interface GrantShieldedViewOutput {
+    /** Unix milliseconds on the wallet clock when the grant expires. */
+    readonly expiresAt: number;
+}
+
+/**
+ * The wallet holds the TSPP viewing and nullifier keys. No method returns a secret key.
+ * `decryptShielded` and `deriveShielded` skip the user prompt while a view grant for this
+ * origin and account is unexpired.
+ */
 export interface ShieldedKeysWalletAdapterProps<Name extends string = string> extends WalletAdapterProps<Name> {
     getShieldedPublicKeys(input: GetShieldedPublicKeysInput): Promise<GetShieldedPublicKeysOutput>;
-    /** The wallet asks the user to approve each batch. */
+    /** The wallet asks the user to approve each batch, unless a live view grant covers it. */
     decryptShielded(input: DecryptShieldedInput): Promise<DecryptShieldedOutput>;
-    /** The wallet asks the user to approve each batch. */
+    /** The wallet asks the user to approve each batch, unless a live view grant covers it. */
     deriveShielded(input: DeriveShieldedInput): Promise<DeriveShieldedOutput>;
+    /**
+     * Approve decrypt and derive for this origin and account until `expiresAt`.
+     * A live grant is returned unchanged and is not extended.
+     */
+    grantShieldedView(input: GrantShieldedViewInput): Promise<GrantShieldedViewOutput>;
 }
 
 export type ShieldedKeysWalletAdapter<Name extends string = string> = WalletAdapter<Name> &

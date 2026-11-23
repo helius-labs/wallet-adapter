@@ -401,6 +401,7 @@ describe('WalletProviderBase', () => {
         ['getShieldedPublicKeys', { protocol: 'tspp-v1' }],
         ['decryptShielded', { protocol: 'tspp-v1', requests: [] }],
         ['deriveShielded', { protocol: 'tspp-v1', requests: [] }],
+        ['grantShieldedView', { protocol: 'tspp-v1', durationSeconds: 30 * 60 }],
     ] as const)('%s()', (method, input) => {
         function getMethod() {
             return ref.current?.getWalletContextState()[method] as ((input: unknown) => Promise<unknown>) | undefined;

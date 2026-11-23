@@ -307,6 +307,14 @@ export function WalletProviderBase({
         [adapter, callShieldedKeys]
     );
 
+    const grantShieldedView: ShieldedKeysWalletAdapterProps['grantShieldedView'] | undefined = useMemo(
+        () =>
+            adapter && 'grantShieldedView' in adapter
+                ? (input) => callShieldedKeys('grantShieldedView', (a) => a.grantShieldedView(input))
+                : undefined,
+        [adapter, callShieldedKeys]
+    );
+
     const handleConnect = useCallback(async () => {
         if (isConnectingRef.current || isDisconnectingRef.current || wallet?.adapter.connected) return;
         if (!wallet) throw handleErrorRef.current(new WalletNotSelectedError());
@@ -360,6 +368,7 @@ export function WalletProviderBase({
                 getShieldedPublicKeys,
                 decryptShielded,
                 deriveShielded,
+                grantShieldedView,
             }}
         >
             {children}
