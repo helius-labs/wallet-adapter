@@ -35,37 +35,53 @@ export interface DecryptShieldedInput {
     readonly requests: readonly ShieldedDecryptRequest[];
 }
 
+/** Byte length of the account nullifier secret returned by `decryptShielded`. */
+export const SHIELDED_NULLIFIER_SECRET_LENGTH = 31;
+
 export interface DecryptShieldedOutput {
     /**
      * Raw cipher output, one per request in request order. Unauthenticated: verify
      * the decoded commitment before accepting an output.
      */
     readonly plaintexts: readonly Uint8Array[];
+    /**
+     * The account's 31-byte nullifier secret. The app uses it with the SDK to compute
+     * nullifiers and merge outputs. A fresh copy on every successful response.
+     */
+    readonly nullifierSecret: Uint8Array;
 }
 
-/** Values derived from the nullifier key for spent detection and merge recovery. */
-export type ShieldedDeriveRequest =
-    | { readonly kind: 'nullifier'; readonly utxoHash: Uint8Array; readonly blinding: Uint8Array }
-    | { readonly kind: 'mergeOutputKey'; readonly firstNullifier: Uint8Array }
-    | { readonly kind: 'mergeOutputBlinding'; readonly firstNullifier: Uint8Array };
+/** Longest view grant a wallet may issue. The wallet clamps longer requests. */
+export const SHIELDED_VIEW_GRANT_MAX_SECONDS = 30 * 60;
 
-export interface DeriveShieldedInput {
+export interface GrantShieldedViewInput {
     readonly protocol: ShieldedKeysProtocol;
-    readonly requests: readonly ShieldedDeriveRequest[];
+    /**
+     * Requested lifetime in seconds. The wallet clamps this to
+     * `1..SHIELDED_VIEW_GRANT_MAX_SECONDS` and sets the expiry from its own clock.
+     */
+    readonly durationSeconds: number;
 }
 
-export interface DeriveShieldedOutput {
-    /** 32-byte values, one per request in request order. */
-    readonly values: readonly Uint8Array[];
+export interface GrantShieldedViewOutput {
+    /** Unix milliseconds on the wallet clock when the grant expires. */
+    readonly expiresAt: number;
 }
 
-/** The wallet holds the TSPP viewing and nullifier keys. No method returns a secret key. */
+/**
+ * The wallet holds the TSPP viewing key. `decryptShielded` returns plaintexts and the
+ * nullifier secret. It skips the user prompt while a view grant for this origin and
+ * account is unexpired.
+ */
 export interface ShieldedKeysWalletAdapterProps<Name extends string = string> extends WalletAdapterProps<Name> {
     getShieldedPublicKeys(input: GetShieldedPublicKeysInput): Promise<GetShieldedPublicKeysOutput>;
-    /** The wallet asks the user to approve each batch. */
+    /** The wallet asks the user to approve each batch, unless a live view grant covers it. */
     decryptShielded(input: DecryptShieldedInput): Promise<DecryptShieldedOutput>;
-    /** The wallet asks the user to approve each batch. */
-    deriveShielded(input: DeriveShieldedInput): Promise<DeriveShieldedOutput>;
+    /**
+     * Approve decrypt for this origin and account until `expiresAt`.
+     * A live grant is returned unchanged and is not extended.
+     */
+    grantShieldedView(input: GrantShieldedViewInput): Promise<GrantShieldedViewOutput>;
 }
 
 export type ShieldedKeysWalletAdapter<Name extends string = string> = WalletAdapter<Name> &

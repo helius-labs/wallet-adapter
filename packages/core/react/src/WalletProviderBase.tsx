@@ -299,10 +299,10 @@ export function WalletProviderBase({
         [adapter, callShieldedKeys]
     );
 
-    const deriveShielded: ShieldedKeysWalletAdapterProps['deriveShielded'] | undefined = useMemo(
+    const grantShieldedView: ShieldedKeysWalletAdapterProps['grantShieldedView'] | undefined = useMemo(
         () =>
-            adapter && 'deriveShielded' in adapter
-                ? (input) => callShieldedKeys('deriveShielded', (a) => a.deriveShielded(input))
+            adapter && 'grantShieldedView' in adapter
+                ? (input) => callShieldedKeys('grantShieldedView', (a) => a.grantShieldedView(input))
                 : undefined,
         [adapter, callShieldedKeys]
     );
@@ -359,7 +359,7 @@ export function WalletProviderBase({
                 signIn,
                 getShieldedPublicKeys,
                 decryptShielded,
-                deriveShielded,
+                grantShieldedView,
             }}
         >
             {children}

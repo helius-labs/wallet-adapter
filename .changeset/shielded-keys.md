@@ -3,7 +3,6 @@
 '@solana/wallet-adapter-react': minor
 ---
 
-Add `useWallet().getShieldedPublicKeys`, `decryptShielded`, and `deriveShielded` for adapters that hold TSPP
-shielded keys. Standard wallets get the methods from the custom `tspp:shieldedKeys` feature in the helius-labs
-fork of `wallet-standard`. The wallet keeps the viewing and nullifier keys and returns only public keys, raw
-plaintexts, and derived values.
+Add `useWallet().getShieldedPublicKeys`, `decryptShielded`, and `grantShieldedView` for adapters that hold TSPP
+shielded keys. `decryptShielded` returns raw plaintexts and the 31-byte nullifier secret. A view grant lets a dapp
+decrypt for up to 30 minutes after one approval. The wallet keeps the viewing key and the derivation seed.
