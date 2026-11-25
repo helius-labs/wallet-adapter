@@ -1,11 +1,10 @@
 import type { WalletAdapter, WalletAdapterProps } from './adapter.js';
 
-/** Key derivation and cipher protocol. */
+/** Key derivation and cipher this feature implements. A later protocol can be added as an optional field. */
 export type ShieldedKeysProtocol = 'tspp-v1';
 
-export interface GetShieldedPublicKeysInput {
-    readonly protocol: ShieldedKeysProtocol;
-}
+/** Protocol recorded on view grants. Callers do not pass it. */
+export const SHIELDED_KEYS_PROTOCOL: ShieldedKeysProtocol = 'tspp-v1';
 
 export interface GetShieldedPublicKeysOutput {
     /** 99-byte shielded address: signing identity, nullifier public key, and tagged viewing public key. */
@@ -31,9 +30,11 @@ export interface ShieldedDecryptRequest {
 }
 
 export interface DecryptShieldedInput {
-    readonly protocol: ShieldedKeysProtocol;
     readonly requests: readonly ShieldedDecryptRequest[];
 }
+
+/** Byte length of the account nullifier secret returned by `decryptShielded`. */
+export const SHIELDED_NULLIFIER_SECRET_LENGTH = 31;
 
 export interface DecryptShieldedOutput {
     /**
@@ -41,31 +42,58 @@ export interface DecryptShieldedOutput {
      * the decoded commitment before accepting an output.
      */
     readonly plaintexts: readonly Uint8Array[];
+    /**
+     * The account's 31-byte nullifier secret. The app uses it with the SDK to compute
+     * nullifiers and merge outputs. A fresh copy on every successful response.
+     */
+    readonly nullifierSecret: Uint8Array;
 }
 
-/** Values derived from the nullifier key for spent detection and merge recovery. */
-export type ShieldedDeriveRequest =
-    | { readonly kind: 'nullifier'; readonly utxoHash: Uint8Array; readonly blinding: Uint8Array }
-    | { readonly kind: 'mergeOutputKey'; readonly firstNullifier: Uint8Array }
-    | { readonly kind: 'mergeOutputBlinding'; readonly firstNullifier: Uint8Array };
+/** Longest view grant a wallet may issue. The wallet clamps longer requests. */
+export const SHIELDED_VIEW_GRANT_MAX_SECONDS = 30 * 60;
 
-export interface DeriveShieldedInput {
-    readonly protocol: ShieldedKeysProtocol;
-    readonly requests: readonly ShieldedDeriveRequest[];
+export interface GrantShieldedViewInput {
+    /**
+     * Requested lifetime in seconds. The wallet clamps this to
+     * `1..SHIELDED_VIEW_GRANT_MAX_SECONDS` and sets the expiry from its own clock.
+     */
+    readonly durationSeconds: number;
 }
 
-export interface DeriveShieldedOutput {
-    /** 32-byte values, one per request in request order. */
-    readonly values: readonly Uint8Array[];
+export interface GrantShieldedViewOutput {
+    /** Unix milliseconds on the wallet clock when the grant expires. */
+    readonly expiresAt: number;
 }
 
-/** The wallet holds the TSPP viewing and nullifier keys. No method returns a secret key. */
+/**
+ * Shielded calls on `useWallet()`. Present only when the connected account supports
+ * the whole feature. `decrypt` skips the prompt while a view grant for this origin
+ * and account is unexpired.
+ */
+export interface Shielded {
+    getPublicKeys(): Promise<GetShieldedPublicKeysOutput>;
+    decrypt(input: DecryptShieldedInput): Promise<DecryptShieldedOutput>;
+    /**
+     * Approve decrypt for this origin and account until `expiresAt`.
+     * A live grant is returned unchanged and is not extended.
+     */
+    grantView(input: GrantShieldedViewInput): Promise<GrantShieldedViewOutput>;
+}
+
+/**
+ * The wallet holds the TSPP viewing key. `decryptShielded` returns plaintexts and the
+ * nullifier secret. It skips the user prompt while a view grant for this origin and
+ * account is unexpired.
+ */
 export interface ShieldedKeysWalletAdapterProps<Name extends string = string> extends WalletAdapterProps<Name> {
-    getShieldedPublicKeys(input: GetShieldedPublicKeysInput): Promise<GetShieldedPublicKeysOutput>;
-    /** The wallet asks the user to approve each batch. */
+    getShieldedPublicKeys(): Promise<GetShieldedPublicKeysOutput>;
+    /** The wallet asks the user to approve each batch, unless a live view grant covers it. */
     decryptShielded(input: DecryptShieldedInput): Promise<DecryptShieldedOutput>;
-    /** The wallet asks the user to approve each batch. */
-    deriveShielded(input: DeriveShieldedInput): Promise<DeriveShieldedOutput>;
+    /**
+     * Approve decrypt for this origin and account until `expiresAt`.
+     * A live grant is returned unchanged and is not extended.
+     */
+    grantShieldedView(input: GrantShieldedViewInput): Promise<GrantShieldedViewOutput>;
 }
 
 export type ShieldedKeysWalletAdapter<Name extends string = string> = WalletAdapter<Name> &

@@ -27,11 +27,7 @@ import React, { FC, useMemo } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { UnsafeBurnerWalletAdapter } from '@solana/wallet-adapter-wallets';
-import {
-    WalletModalProvider,
-    WalletDisconnectButton,
-    WalletMultiButton
-} from '@solana/wallet-adapter-react-ui';
+import { WalletModalProvider, WalletDisconnectButton, WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
 
 // Default styles that can be overridden by your app
@@ -70,7 +66,7 @@ export const Wallet: FC = () => {
                 <WalletModalProvider>
                     <WalletMultiButton />
                     <WalletDisconnectButton />
-                    { /* Your app's components go here, nested within the context providers. */ }
+                    {/* Your app's components go here, nested within the context providers. */}
                 </WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>
@@ -106,7 +102,7 @@ export const SendSOLToRandomAddress: FC = () => {
 
         const {
             context: { slot: minContextSlot },
-            value: { blockhash, lastValidBlockHeight }
+            value: { blockhash, lastValidBlockHeight },
         } = await connection.getLatestBlockhashAndContext();
 
         const signature = await sendTransaction(transaction, connection, { minContextSlot });
@@ -125,23 +121,27 @@ export const SendSOLToRandomAddress: FC = () => {
 ## Use wallet-held shielded keys
 
 Wallets that implement the custom `tspp:shieldedKeys` feature keep the user's TSPP
-viewing and nullifier keys. The app gets public keys, decrypted outputs, and
-nullifiers, but never a secret key. The wallet asks the user to approve each
-`decrypt` and `derive` batch.
+viewing key. The app gets public keys, decrypted outputs, and the 31-byte nullifier
+secret. It computes nullifiers and merge outputs with the SDK. A view grant lets the
+app decrypt for up to 30 minutes after one approval. Without a grant, the wallet asks
+the user to approve each `decrypt` batch.
 
 ```tsx
-const { connected, getShieldedPublicKeys, decryptShielded, deriveShielded } = useWallet();
+const { connected, shielded } = useWallet();
 
 async function readPrivateOutputs() {
-    if (!connected || !getShieldedPublicKeys || !decryptShielded || !deriveShielded) {
+    if (!connected || !shielded) {
         throw new Error('Connect a wallet that supports shielded keys');
     }
-    const protocol = 'tspp-v1';
+    // 1. One approval covers decrypt until expiresAt. A live grant is returned
+    //    unchanged. The wallet clamps the lifetime to 30 minutes.
+    const { expiresAt } = await shielded.grantView({ durationSeconds: 30 * 60 });
 
-    // 1. Public keys. The shielded address contains the nullifier public key.
-    const { shieldedAddress, viewingPublicKeys } = await getShieldedPublicKeys({ protocol });
+    // 2. Public keys. The shielded address contains the nullifier public key.
+    //    This call does not require a grant.
+    const { shieldedAddress, viewingPublicKeys } = await shielded.getPublicKeys();
 
-    // 2. Fetch encrypted outputs for the address's view tag with the Zolana SDK
+    // 3. Fetch encrypted outputs for the address's view tag with the Zolana SDK
     //    (`getEncryptedUtxosByTags`). Build one request per output and held viewing
     //    key: outputs sent before a key rotation open only under a retired key.
     //    Use label 'ringDeposit' with slot 0 for ring-deposit records.
@@ -156,21 +156,17 @@ async function readPrivateOutputs() {
         }))
     );
 
-    // 3. The wallet decrypts after the user approves.
-    const { plaintexts } = await decryptShielded({ protocol, requests });
+    // 4. The wallet decrypts without another prompt while expiresAt is in the future.
+    //    nullifierSecret is the account secret. Compute nullifiers and merge outputs
+    //    from it with the SDK.
+    const { plaintexts, nullifierSecret } = await shielded.decrypt({ requests });
 
-    // 4. Decode each plaintext with the SDK and recompute the UTXO hash from the
+    // 5. Decode each plaintext with the SDK and recompute the UTXO hash from the
     //    nullifier public key. Discard outputs whose hash does not match the indexed hash.
-
-    // 5. Derive nullifiers of the accepted UTXOs to detect spent outputs.
-    const { values: nullifiers } = await deriveShielded({
-        protocol,
-        requests: accepted.map((utxo) => ({ kind: 'nullifier', utxoHash: utxo.hash, blinding: utxo.blinding })),
-    });
 }
 ```
 
-The methods are `undefined` when the wallet or the connected account lacks the
+`shielded` is `undefined` when the wallet or the connected account lacks the
 feature. A callback saved before a disconnect rejects with
 `WalletNotConnectedError`, and one saved before an account switch with
 `WalletAccountError`. A result that arrives after the account changed is
@@ -186,10 +182,12 @@ checks.
 Decryption output is unauthenticated: a ciphertext for someone else decrypts to
 noise. Accept an output only after its recomputed hash matches the indexed hash.
 
-`deriveShielded` accepts `nullifier`, `mergeOutputKey`, and `mergeOutputBlinding`
-requests. The last two recover merge outputs. The feature does not return
-per-transaction viewing keys, so sent history is not available, and it does not
-sign or prove spends.
+`shielded.decrypt` returns the account nullifier secret with the plaintexts. The app
+uses that secret and the SDK to recognize spent notes and to recover merge outputs.
+The viewing secret and the derivation seed stay in the wallet. The feature does not
+return per-transaction viewing keys, so sent history is not available. A transfer
+still needs the owner's signature.
 
-Outside React, call the same methods on a connected adapter that exposes them.
+Outside React, call `getShieldedPublicKeys`, `decryptShielded`, and `grantShieldedView`
+on a connected adapter that exposes them.
 Wallet requirements are in [WALLET.md](./WALLET.md#wallet-held-shielded-keys).
