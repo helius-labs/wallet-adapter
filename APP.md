@@ -127,19 +127,19 @@ app decrypt for up to 30 minutes after one approval. Without a grant, the wallet
 the user to approve each `decrypt` batch.
 
 ```tsx
-const { connected, getShieldedPublicKeys, decryptShielded, grantShieldedView } = useWallet();
+const { connected, shielded } = useWallet();
 
 async function readPrivateOutputs() {
-    if (!connected || !getShieldedPublicKeys || !decryptShielded || !grantShieldedView) {
+    if (!connected || !shielded) {
         throw new Error('Connect a wallet that supports shielded keys');
     }
     // 1. One approval covers decrypt until expiresAt. A live grant is returned
     //    unchanged. The wallet clamps the lifetime to 30 minutes.
-    const { expiresAt } = await grantShieldedView({ durationSeconds: 30 * 60 });
+    const { expiresAt } = await shielded.grantView({ durationSeconds: 30 * 60 });
 
     // 2. Public keys. The shielded address contains the nullifier public key.
     //    This call does not require a grant.
-    const { shieldedAddress, viewingPublicKeys } = await getShieldedPublicKeys();
+    const { shieldedAddress, viewingPublicKeys } = await shielded.getPublicKeys();
 
     // 3. Fetch encrypted outputs for the address's view tag with the Zolana SDK
     //    (`getEncryptedUtxosByTags`). Build one request per output and held viewing
@@ -159,14 +159,14 @@ async function readPrivateOutputs() {
     // 4. The wallet decrypts without another prompt while expiresAt is in the future.
     //    nullifierSecret is the account secret. Compute nullifiers and merge outputs
     //    from it with the SDK.
-    const { plaintexts, nullifierSecret } = await decryptShielded({ requests });
+    const { plaintexts, nullifierSecret } = await shielded.decrypt({ requests });
 
     // 5. Decode each plaintext with the SDK and recompute the UTXO hash from the
     //    nullifier public key. Discard outputs whose hash does not match the indexed hash.
 }
 ```
 
-The methods are `undefined` when the wallet or the connected account lacks the
+`shielded` is `undefined` when the wallet or the connected account lacks the
 feature. A callback saved before a disconnect rejects with
 `WalletNotConnectedError`, and one saved before an account switch with
 `WalletAccountError`. A result that arrives after the account changed is
@@ -182,11 +182,12 @@ checks.
 Decryption output is unauthenticated: a ciphertext for someone else decrypts to
 noise. Accept an output only after its recomputed hash matches the indexed hash.
 
-`decryptShielded` returns the account nullifier secret with the plaintexts. The app
+`shielded.decrypt` returns the account nullifier secret with the plaintexts. The app
 uses that secret and the SDK to recognize spent notes and to recover merge outputs.
 The viewing secret and the derivation seed stay in the wallet. The feature does not
 return per-transaction viewing keys, so sent history is not available. A transfer
 still needs the owner's signature.
 
-Outside React, call the same methods on a connected adapter that exposes them.
+Outside React, call `getShieldedPublicKeys`, `decryptShielded`, and `grantShieldedView`
+on a connected adapter that exposes them.
 Wallet requirements are in [WALLET.md](./WALLET.md#wallet-held-shielded-keys).

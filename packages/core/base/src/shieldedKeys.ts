@@ -66,6 +66,21 @@ export interface GrantShieldedViewOutput {
 }
 
 /**
+ * Shielded calls on `useWallet()`. Present only when the connected account supports
+ * the whole feature. `decrypt` skips the prompt while a view grant for this origin
+ * and account is unexpired.
+ */
+export interface Shielded {
+    getPublicKeys(): Promise<GetShieldedPublicKeysOutput>;
+    decrypt(input: DecryptShieldedInput): Promise<DecryptShieldedOutput>;
+    /**
+     * Approve decrypt for this origin and account until `expiresAt`.
+     * A live grant is returned unchanged and is not extended.
+     */
+    grantView(input: GrantShieldedViewInput): Promise<GrantShieldedViewOutput>;
+}
+
+/**
  * The wallet holds the TSPP viewing key. `decryptShielded` returns plaintexts and the
  * nullifier secret. It skips the user prompt while a view grant for this origin and
  * account is unexpired.

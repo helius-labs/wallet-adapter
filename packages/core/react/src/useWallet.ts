@@ -1,7 +1,7 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
-    type ShieldedKeysWalletAdapterProps,
+    type Shielded,
     type SignerWalletAdapterProps,
     type SignInMessageSignerWalletAdapterProps,
     type WalletAdapterProps,
@@ -34,9 +34,8 @@ export interface WalletContextState {
     signAllTransactions: SignerWalletAdapterProps['signAllTransactions'] | undefined;
     signMessage: MessageSignerWalletAdapterProps['signMessage'] | undefined;
     signIn: SignInMessageSignerWalletAdapterProps['signIn'] | undefined;
-    getShieldedPublicKeys: ShieldedKeysWalletAdapterProps['getShieldedPublicKeys'] | undefined;
-    decryptShielded: ShieldedKeysWalletAdapterProps['decryptShielded'] | undefined;
-    grantShieldedView: ShieldedKeysWalletAdapterProps['grantShieldedView'] | undefined;
+    /** `undefined` when the connected wallet does not support shielded keys. */
+    shielded: Shielded | undefined;
 }
 
 const EMPTY_ARRAY: ReadonlyArray<never> = [];
@@ -70,14 +69,16 @@ const DEFAULT_CONTEXT: Partial<WalletContextState> = {
     signIn() {
         return Promise.reject(logMissingProviderError('call', 'signIn'));
     },
-    getShieldedPublicKeys() {
-        return Promise.reject(logMissingProviderError('call', 'getShieldedPublicKeys'));
-    },
-    decryptShielded() {
-        return Promise.reject(logMissingProviderError('call', 'decryptShielded'));
-    },
-    grantShieldedView() {
-        return Promise.reject(logMissingProviderError('call', 'grantShieldedView'));
+    shielded: {
+        getPublicKeys() {
+            return Promise.reject(logMissingProviderError('call', 'shielded.getPublicKeys'));
+        },
+        decrypt() {
+            return Promise.reject(logMissingProviderError('call', 'shielded.decrypt'));
+        },
+        grantView() {
+            return Promise.reject(logMissingProviderError('call', 'shielded.grantView'));
+        },
     },
 };
 Object.defineProperty(DEFAULT_CONTEXT, 'wallets', {

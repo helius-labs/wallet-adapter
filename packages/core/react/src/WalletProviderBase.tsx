@@ -1,6 +1,7 @@
 import {
     type Adapter,
     type MessageSignerWalletAdapterProps,
+    type Shielded,
     type ShieldedKeysWalletAdapter,
     type ShieldedKeysWalletAdapterProps,
     type SignerWalletAdapterProps,
@@ -283,26 +284,17 @@ export function WalletProviderBase({
         [adapter, connected, publicKey]
     );
 
-    const getShieldedPublicKeys: ShieldedKeysWalletAdapterProps['getShieldedPublicKeys'] | undefined = useMemo(
+    const shielded: Shielded | undefined = useMemo(
         () =>
-            adapter && 'getShieldedPublicKeys' in adapter
-                ? () => callShieldedKeys('getShieldedPublicKeys', (a) => a.getShieldedPublicKeys())
-                : undefined,
-        [adapter, callShieldedKeys]
-    );
-
-    const decryptShielded: ShieldedKeysWalletAdapterProps['decryptShielded'] | undefined = useMemo(
-        () =>
-            adapter && 'decryptShielded' in adapter
-                ? (input) => callShieldedKeys('decryptShielded', (a) => a.decryptShielded(input))
-                : undefined,
-        [adapter, callShieldedKeys]
-    );
-
-    const grantShieldedView: ShieldedKeysWalletAdapterProps['grantShieldedView'] | undefined = useMemo(
-        () =>
-            adapter && 'grantShieldedView' in adapter
-                ? (input) => callShieldedKeys('grantShieldedView', (a) => a.grantShieldedView(input))
+            adapter &&
+            'getShieldedPublicKeys' in adapter &&
+            'decryptShielded' in adapter &&
+            'grantShieldedView' in adapter
+                ? {
+                      getPublicKeys: () => callShieldedKeys('getShieldedPublicKeys', (a) => a.getShieldedPublicKeys()),
+                      decrypt: (input) => callShieldedKeys('decryptShielded', (a) => a.decryptShielded(input)),
+                      grantView: (input) => callShieldedKeys('grantShieldedView', (a) => a.grantShieldedView(input)),
+                  }
                 : undefined,
         [adapter, callShieldedKeys]
     );
@@ -357,9 +349,7 @@ export function WalletProviderBase({
                 signAllTransactions,
                 signMessage,
                 signIn,
-                getShieldedPublicKeys,
-                decryptShielded,
-                grantShieldedView,
+                shielded,
             }}
         >
             {children}

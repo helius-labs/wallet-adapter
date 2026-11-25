@@ -159,5 +159,6 @@ secret is 31 bytes, check that the first viewing key matches the one in the shie
 address, and reject with an error that carries no wallet details. Use
 `ShieldedViewGrantStore` for the grant record. The pinned
 `@solana/wallet-standard-wallet-adapter-base` does not forward `grantView` or the
-nullifier secret yet, so those parts of `useWallet()` stay absent for a Wallet
-Standard wallet until that package grows them.
+nullifier secret yet, so `useWallet().shielded` stays `undefined` for a Wallet
+Standard wallet until that package grows them. React exposes the three adapter
+methods as `shielded.getPublicKeys`, `shielded.decrypt`, and `shielded.grantView`.

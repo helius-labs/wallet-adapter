@@ -398,25 +398,34 @@ describe('WalletProviderBase', () => {
         });
     });
     describe.each([
-        ['getShieldedPublicKeys', []],
-        ['decryptShielded', [{ requests: [] }]],
-        ['grantShieldedView', [{ durationSeconds: 30 * 60 }]],
-    ] as const)('%s()', (method, args) => {
+        ['getPublicKeys', 'getShieldedPublicKeys', []],
+        ['decrypt', 'decryptShielded', [{ requests: [] }]],
+        ['grantView', 'grantShieldedView', [{ durationSeconds: 30 * 60 }]],
+    ] as const)('shielded.%s()', (method, adapterMethod, args) => {
+        function shielded() {
+            return ref.current?.getWalletContextState().shielded;
+        }
         function getMethod() {
-            return ref.current?.getWalletContextState()[method] as
-                | ((...args: readonly unknown[]) => Promise<unknown>)
-                | undefined;
+            return shielded()?.[method] as ((...args: readonly unknown[]) => Promise<unknown>) | undefined;
+        }
+        function installAdapter(call: ReturnType<typeof jest.fn> = jest.fn()) {
+            Object.assign(fooWalletAdapter, {
+                getShieldedPublicKeys: jest.fn(),
+                decryptShielded: jest.fn(),
+                grantShieldedView: jest.fn(),
+                [adapterMethod]: call,
+            });
+            return call;
         }
 
         it('is undefined for wallets without the capability', () => {
             renderTest({ adapter: fooWalletAdapter });
-            expect(getMethod()).toBeUndefined();
+            expect(shielded()).toBeUndefined();
         });
 
         it('exposes the adapter capability after connecting', async () => {
             const output = { result: method };
-            const call = jest.fn().mockResolvedValue(output);
-            Object.assign(fooWalletAdapter, { [method]: call });
+            const call = installAdapter(jest.fn().mockResolvedValue(output));
             renderTest({ adapter: fooWalletAdapter });
             await act(async () => {
                 await fooWalletAdapter.connect();
@@ -430,19 +439,20 @@ describe('WalletProviderBase', () => {
             await act(async () => {
                 await fooWalletAdapter.connect();
             });
-            expect(getMethod()).toBeUndefined();
+            expect(shielded()).toBeUndefined();
             const nextPublicKey = new PublicKey('Bar11111111111111111111111111111111111111111');
-            Object.assign(fooWalletAdapter, { publicKey: nextPublicKey, [method]: jest.fn() });
+            fooWalletAdapter.publicKey = nextPublicKey;
+            installAdapter();
             act(() => {
                 fooWalletAdapter.emit('connect', nextPublicKey);
             });
-            expect(getMethod()).toBeDefined();
+            expect(shielded()).toBeDefined();
         });
 
         it('rejects a saved callback after disconnect without contacting the wallet', async () => {
             const call = jest.fn();
             const onError = jest.fn();
-            Object.assign(fooWalletAdapter, { [method]: call });
+            installAdapter(call);
             renderTest({ adapter: fooWalletAdapter, onError });
             await act(async () => {
                 await fooWalletAdapter.connect();
@@ -459,7 +469,7 @@ describe('WalletProviderBase', () => {
         it('rejects a saved callback after an account switch without contacting the wallet', async () => {
             const call = jest.fn();
             const onError = jest.fn();
-            Object.assign(fooWalletAdapter, { [method]: call });
+            installAdapter(call);
             renderTest({ adapter: fooWalletAdapter, onError });
             await act(async () => {
                 await fooWalletAdapter.connect();
@@ -481,7 +491,7 @@ describe('WalletProviderBase', () => {
                 fooWalletAdapter.publicKey = nextPublicKey;
                 return { result: method };
             });
-            Object.assign(fooWalletAdapter, { [method]: call });
+            installAdapter(call);
             renderTest({ adapter: fooWalletAdapter });
             await act(async () => {
                 await fooWalletAdapter.connect();
