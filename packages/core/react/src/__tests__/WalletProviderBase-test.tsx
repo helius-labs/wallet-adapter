@@ -398,12 +398,14 @@ describe('WalletProviderBase', () => {
         });
     });
     describe.each([
-        ['getShieldedPublicKeys', { protocol: 'tspp-v1' }],
-        ['decryptShielded', { protocol: 'tspp-v1', requests: [] }],
-        ['grantShieldedView', { protocol: 'tspp-v1', durationSeconds: 30 * 60 }],
-    ] as const)('%s()', (method, input) => {
+        ['getShieldedPublicKeys', []],
+        ['decryptShielded', [{ requests: [] }]],
+        ['grantShieldedView', [{ durationSeconds: 30 * 60 }]],
+    ] as const)('%s()', (method, args) => {
         function getMethod() {
-            return ref.current?.getWalletContextState()[method] as ((input: unknown) => Promise<unknown>) | undefined;
+            return ref.current?.getWalletContextState()[method] as
+                | ((...args: readonly unknown[]) => Promise<unknown>)
+                | undefined;
         }
 
         it('is undefined for wallets without the capability', () => {
@@ -419,8 +421,8 @@ describe('WalletProviderBase', () => {
             await act(async () => {
                 await fooWalletAdapter.connect();
             });
-            await expect(getMethod()?.(input)).resolves.toEqual(output);
-            expect(call).toHaveBeenCalledWith(input);
+            await expect(getMethod()?.(...args)).resolves.toEqual(output);
+            expect(call).toHaveBeenCalledWith(...args);
         });
 
         it('resolves the capability again when the wallet switches accounts', async () => {
@@ -449,7 +451,7 @@ describe('WalletProviderBase', () => {
             await act(async () => {
                 await fooWalletAdapter.disconnect();
             });
-            await expect(saved?.(input)).rejects.toThrow(WalletNotConnectedError);
+            await expect(saved?.(...args)).rejects.toThrow(WalletNotConnectedError);
             expect(call).not.toHaveBeenCalled();
             expect(onError).toHaveBeenCalledTimes(1);
         });
@@ -468,7 +470,7 @@ describe('WalletProviderBase', () => {
                 fooWalletAdapter.publicKey = nextPublicKey;
                 fooWalletAdapter.emit('connect', nextPublicKey);
             });
-            await expect(saved?.(input)).rejects.toThrow(WalletAccountError);
+            await expect(saved?.(...args)).rejects.toThrow(WalletAccountError);
             expect(call).not.toHaveBeenCalled();
             expect(onError).toHaveBeenCalledTimes(1);
         });
@@ -484,7 +486,7 @@ describe('WalletProviderBase', () => {
             await act(async () => {
                 await fooWalletAdapter.connect();
             });
-            await expect(getMethod()?.(input)).rejects.toThrow(WalletAccountError);
+            await expect(getMethod()?.(...args)).rejects.toThrow(WalletAccountError);
             expect(call).toHaveBeenCalledTimes(1);
         });
     });

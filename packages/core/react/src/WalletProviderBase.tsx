@@ -286,7 +286,7 @@ export function WalletProviderBase({
     const getShieldedPublicKeys: ShieldedKeysWalletAdapterProps['getShieldedPublicKeys'] | undefined = useMemo(
         () =>
             adapter && 'getShieldedPublicKeys' in adapter
-                ? (input) => callShieldedKeys('getShieldedPublicKeys', (a) => a.getShieldedPublicKeys(input))
+                ? () => callShieldedKeys('getShieldedPublicKeys', (a) => a.getShieldedPublicKeys())
                 : undefined,
         [adapter, callShieldedKeys]
     );

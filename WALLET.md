@@ -25,11 +25,9 @@ type TSPPShieldedKeysFeature = {
         version: '1.0.0';
         getPublicKeys(input: {
             account: WalletAccount;
-            protocol: 'tspp-v1';
         }): Promise<{ shieldedAddress: Uint8Array; viewingPublicKeys: readonly Uint8Array[] }>;
         decrypt(input: {
             account: WalletAccount;
-            protocol: 'tspp-v1';
             requests: readonly {
                 ciphertext: Uint8Array;
                 viewingPublicKey: Uint8Array; // 33 bytes
@@ -41,7 +39,6 @@ type TSPPShieldedKeysFeature = {
         }): Promise<{ plaintexts: readonly Uint8Array[]; nullifierSecret: Uint8Array }>; // 31 bytes
         grantView(input: {
             account: WalletAccount;
-            protocol: 'tspp-v1';
             durationSeconds: number; // wallet clamps to 1..1800
         }): Promise<{ expiresAt: number }>; // unix milliseconds, wallet clock
     };
@@ -74,14 +71,16 @@ The wallet must:
 
 1. Take the requesting origin from its extension or transport, not from the
    request payload.
-2. Reject accounts that are not authorized for the connection, and protocols other
-   than `tspp-v1`.
+2. Reject accounts that are not authorized for the connection. This feature is
+   `tspp-v1`. Callers do not send a protocol. A later protocol can be added as an
+   optional field that defaults to `tspp-v1`.
 3. Ask the user to approve each `decrypt` batch, unless a live view grant covers
-   this origin, account, and `tspp-v1`. Show the origin, account, and request count,
+   this origin and account. Show the origin, account, and request count,
    and state that approval reveals private balances, history, and the nullifier
    secret. Connection approval does not cover this.
 4. Store a view grant as the only new state. It records the origin, account,
-   protocol, and `expiresAt`, and no key material. `ShieldedViewGrantStore` in
+   `SHIELDED_KEYS_PROTOCOL` (`tspp-v1`), and `expiresAt`, and no key material.
+   `ShieldedViewGrantStore` in
    `@solana/wallet-adapter-base` is the reference behavior:
     - Clamp `durationSeconds` to `1..1800`. Set `expiresAt` from the wallet clock.
       Ignore a dapp-supplied expiry.

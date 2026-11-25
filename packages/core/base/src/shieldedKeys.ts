@@ -1,11 +1,10 @@
 import type { WalletAdapter, WalletAdapterProps } from './adapter.js';
 
-/** Key derivation and cipher protocol. */
+/** Key derivation and cipher this feature implements. A later protocol can be added as an optional field. */
 export type ShieldedKeysProtocol = 'tspp-v1';
 
-export interface GetShieldedPublicKeysInput {
-    readonly protocol: ShieldedKeysProtocol;
-}
+/** Protocol recorded on view grants. Callers do not pass it. */
+export const SHIELDED_KEYS_PROTOCOL: ShieldedKeysProtocol = 'tspp-v1';
 
 export interface GetShieldedPublicKeysOutput {
     /** 99-byte shielded address: signing identity, nullifier public key, and tagged viewing public key. */
@@ -31,7 +30,6 @@ export interface ShieldedDecryptRequest {
 }
 
 export interface DecryptShieldedInput {
-    readonly protocol: ShieldedKeysProtocol;
     readonly requests: readonly ShieldedDecryptRequest[];
 }
 
@@ -55,7 +53,6 @@ export interface DecryptShieldedOutput {
 export const SHIELDED_VIEW_GRANT_MAX_SECONDS = 30 * 60;
 
 export interface GrantShieldedViewInput {
-    readonly protocol: ShieldedKeysProtocol;
     /**
      * Requested lifetime in seconds. The wallet clamps this to
      * `1..SHIELDED_VIEW_GRANT_MAX_SECONDS` and sets the expiry from its own clock.
@@ -74,7 +71,7 @@ export interface GrantShieldedViewOutput {
  * account is unexpired.
  */
 export interface ShieldedKeysWalletAdapterProps<Name extends string = string> extends WalletAdapterProps<Name> {
-    getShieldedPublicKeys(input: GetShieldedPublicKeysInput): Promise<GetShieldedPublicKeysOutput>;
+    getShieldedPublicKeys(): Promise<GetShieldedPublicKeysOutput>;
     /** The wallet asks the user to approve each batch, unless a live view grant covers it. */
     decryptShielded(input: DecryptShieldedInput): Promise<DecryptShieldedOutput>;
     /**

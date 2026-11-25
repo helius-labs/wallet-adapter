@@ -133,15 +133,13 @@ async function readPrivateOutputs() {
     if (!connected || !getShieldedPublicKeys || !decryptShielded || !grantShieldedView) {
         throw new Error('Connect a wallet that supports shielded keys');
     }
-    const protocol = 'tspp-v1';
-
     // 1. One approval covers decrypt until expiresAt. A live grant is returned
     //    unchanged. The wallet clamps the lifetime to 30 minutes.
-    const { expiresAt } = await grantShieldedView({ protocol, durationSeconds: 30 * 60 });
+    const { expiresAt } = await grantShieldedView({ durationSeconds: 30 * 60 });
 
     // 2. Public keys. The shielded address contains the nullifier public key.
     //    This call does not require a grant.
-    const { shieldedAddress, viewingPublicKeys } = await getShieldedPublicKeys({ protocol });
+    const { shieldedAddress, viewingPublicKeys } = await getShieldedPublicKeys();
 
     // 3. Fetch encrypted outputs for the address's view tag with the Zolana SDK
     //    (`getEncryptedUtxosByTags`). Build one request per output and held viewing
@@ -161,7 +159,7 @@ async function readPrivateOutputs() {
     // 4. The wallet decrypts without another prompt while expiresAt is in the future.
     //    nullifierSecret is the account secret. Compute nullifiers and merge outputs
     //    from it with the SDK.
-    const { plaintexts, nullifierSecret } = await decryptShielded({ protocol, requests });
+    const { plaintexts, nullifierSecret } = await decryptShielded({ requests });
 
     // 5. Decode each plaintext with the SDK and recompute the UTXO hash from the
     //    nullifier public key. Discard outputs whose hash does not match the indexed hash.
